@@ -16,19 +16,19 @@ type networkFile struct {
 	} `json:"nodes"`
 }
 
-func loadNetwork(path string) (*Network, *Node, error) {
+func loadNetwork(path string) (*Network, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return nil, nil, fmt.Errorf("reading network file: %w", err)
+		return nil, fmt.Errorf("reading network file: %w", err)
 	}
 
 	var nf networkFile
 	if err := json.Unmarshal(data, &nf); err != nil {
-		return nil, nil, fmt.Errorf("parsing network file: %w", err)
+		return nil, fmt.Errorf("parsing network file: %w", err)
 	}
 
 	if len(nf.Nodes) == 0 {
-		return nil, nil, fmt.Errorf("network file contains no nodes")
+		return nil, fmt.Errorf("network file contains no nodes")
 	}
 
 	nodes := make(map[string]*Node, len(nf.Nodes))
@@ -45,11 +45,9 @@ func loadNetwork(path string) (*Network, *Node, error) {
 	if startID == "" {
 		startID = nf.Nodes[0].ID
 	}
-	startNode, ok := nodes[startID]
-	if !ok {
-		return nil, nil, fmt.Errorf("start node %q not found in nodes", startID)
+	if _, ok := nodes[startID]; !ok {
+		return nil, fmt.Errorf("start node %q not found in nodes", startID)
 	}
-	startNode.Discovered = true
 
-	return &Network{Nodes: nodes}, startNode, nil
+	return &Network{Nodes: nodes, StartNodeID: startID}, nil
 }

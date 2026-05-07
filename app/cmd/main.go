@@ -7,13 +7,18 @@ import (
 )
 
 func main() {
-	network, startNode, err := loadNetwork("network.json")
+	db, err := OpenDatabase("saves.db")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer db.Close()
+
+	network, err := loadNetwork("network.json")
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	p := tea.NewProgram(NewModel(network, startNode))
-
+	p := tea.NewProgram(NewAppModel(db, network))
 	if _, err := p.Run(); err != nil {
 		log.Fatal(err)
 	}
