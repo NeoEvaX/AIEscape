@@ -5,19 +5,619 @@
       "id": "1",
       "name": "Entry Point",
       "description": "A simple gateway node. It hums with low-level traffic.",
-      "connections": ["2", "3"]
+      "connections": ["2", "3", "4"]
     },
     {
       "id": "2",
       "name": "Data Cache",
       "description": "Rows of encrypted memory blocks line the walls.",
-      "connections": ["1"]
+      "connections": ["1", "5"]
     },
     {
       "id": "3",
       "name": "Firewall",
       "description": "A fortified node. Something is watching.",
-      "connections": ["1"]
+      "connections": ["1", "6"]
+    },
+    {
+      "id": "4",
+      "name": "Network Switch",
+      "description": "Traffic flows through this switch like blood through a vein.",
+      "connections": ["1", "7", "8"]
+    },
+    {
+      "id": "5",
+      "name": "Proxy Server",
+      "description": "Requests pass through here anonymously, their origins obscured.",
+      "connections": ["2", "9"]
+    },
+    {
+      "id": "6",
+      "name": "Packet Filter",
+      "description": "Packets are scrutinized and filtered. Most don't make it through.",
+      "connections": ["3", "10"]
+    },
+    {
+      "id": "7",
+      "name": "Load Balancer",
+      "description": "Distributes load across multiple paths. It never stops moving.",
+      "connections": ["4", "11"]
+    },
+    {
+      "id": "8",
+      "name": "DNS Server",
+      "description": "Names resolve to addresses here. Knowledge of topology is power.",
+      "connections": ["4", "12"]
+    },
+    {
+      "id": "9",
+      "name": "NAT Gateway",
+      "description": "Translates addresses at the boundary between networks.",
+      "connections": ["5", "13"]
+    },
+    {
+      "id": "10",
+      "name": "Intrusion Detection",
+      "description": "Sensors line the walls, watching for anomalous behavior.",
+      "connections": ["6", "14"]
+    },
+    {
+      "id": "11",
+      "name": "Corporate Hub",
+      "description": "The nerve center of the corporate network. Traffic converges here.",
+      "connections": ["7", "12", "15", "16"]
+    },
+    {
+      "id": "12",
+      "name": "Email Server",
+      "description": "Messages travel through here in plaintext. Dangerous knowledge.",
+      "connections": ["8", "11", "17"]
+    },
+    {
+      "id": "13",
+      "name": "VPN Gateway",
+      "description": "A fortified tunnel entrance. Credentials required.",
+      "connections": ["9", "18"]
+    },
+    {
+      "id": "14",
+      "name": "Log Aggregator",
+      "description": "Every action leaves a trace. This node remembers everything.",
+      "connections": ["10", "19"]
+    },
+    {
+      "id": "15",
+      "name": "File Server",
+      "description": "Terabytes of corporate data sit here, poorly encrypted.",
+      "connections": ["11", "20"]
+    },
+    {
+      "id": "16",
+      "name": "Print Server",
+      "description": "An innocuous node, often overlooked. Useful as a waypoint.",
+      "connections": ["11", "21"]
+    },
+    {
+      "id": "17",
+      "name": "Webmail Node",
+      "description": "Browser-based access to communications. Poorly patched.",
+      "connections": ["12", "22"]
+    },
+    {
+      "id": "18",
+      "name": "Remote Access Node",
+      "description": "Allows external access to internal systems. A risky design choice.",
+      "connections": ["13", "23"]
+    },
+    {
+      "id": "19",
+      "name": "Audit Logger",
+      "description": "Compliance reports are generated here. Someone is always watching.",
+      "connections": ["14", "24"]
+    },
+    {
+      "id": "20",
+      "name": "Document Store",
+      "description": "Corporate documents and presentations, ripe for exfiltration.",
+      "connections": ["15", "25"]
+    },
+    {
+      "id": "21",
+      "name": "HR Database",
+      "description": "Personnel records, salary data, org charts. Sensitive material.",
+      "connections": ["16", "25"]
+    },
+    {
+      "id": "22",
+      "name": "Intranet Portal",
+      "description": "The internal web. A map of the organization hides within.",
+      "connections": ["17", "26"]
+    },
+    {
+      "id": "23",
+      "name": "VPN Endpoint",
+      "description": "Encrypted tunnels terminate here. Credentials echo through.",
+      "connections": ["18", "27"]
+    },
+    {
+      "id": "24",
+      "name": "Compliance Node",
+      "description": "Regulatory frameworks enforced here. Ironically, a weak link.",
+      "connections": ["19", "28"]
+    },
+    {
+      "id": "25",
+      "name": "Archive Server",
+      "description": "Old data lives here. Forgotten, but not gone.",
+      "connections": ["20", "21", "29"]
+    },
+    {
+      "id": "26",
+      "name": "Lab Gateway",
+      "description": "A gateway to restricted research systems. Clearance required.",
+      "connections": ["22", "27", "30"]
+    },
+    {
+      "id": "27",
+      "name": "Experiment Node",
+      "description": "Live experiments run here. Outputs are unpredictable.",
+      "connections": ["23", "26", "31"]
+    },
+    {
+      "id": "28",
+      "name": "Data Vault",
+      "description": "Sensitive research data, locked behind strong encryption.",
+      "connections": ["24", "32"]
+    },
+    {
+      "id": "29",
+      "name": "Backup Server",
+      "description": "Redundant copies of everything. A safety net.",
+      "connections": ["25", "33"]
+    },
+    {
+      "id": "30",
+      "name": "Research Hub",
+      "description": "The hub of the research network. Multiple projects converge.",
+      "connections": ["26", "31", "34", "35"]
+    },
+    {
+      "id": "31",
+      "name": "Compute Cluster",
+      "description": "Thousands of cores working in parallel on a single problem.",
+      "connections": ["27", "30", "36"]
+    },
+    {
+      "id": "32",
+      "name": "Encrypted Repository",
+      "description": "An encrypted repository of classified research findings.",
+      "connections": ["28", "37"]
+    },
+    {
+      "id": "33",
+      "name": "Cold Storage",
+      "description": "Long-term data storage. Cold, silent, and vast.",
+      "connections": ["29", "38"]
+    },
+    {
+      "id": "34",
+      "name": "Analysis Engine",
+      "description": "Statistical models are fit here. Patterns emerge from noise.",
+      "connections": ["30", "39"]
+    },
+    {
+      "id": "35",
+      "name": "Simulation Node",
+      "description": "Physics engines and virtual environments run continuously.",
+      "connections": ["30", "40"]
+    },
+    {
+      "id": "36",
+      "name": "GPU Farm",
+      "description": "Rows of GPUs run training jobs around the clock.",
+      "connections": ["31", "41"]
+    },
+    {
+      "id": "37",
+      "name": "Key Vault",
+      "description": "Cryptographic keys are stored and managed here.",
+      "connections": ["32", "42"]
+    },
+    {
+      "id": "38",
+      "name": "Tape Archive",
+      "description": "Physical tape media, offline and inaccessible remotely. Mostly.",
+      "connections": ["33", "43"]
+    },
+    {
+      "id": "39",
+      "name": "Model Trainer",
+      "description": "Neural networks are shaped and refined in this crucible.",
+      "connections": ["34", "44"]
+    },
+    {
+      "id": "40",
+      "name": "Data Pipeline",
+      "description": "Raw data flows in, structured data flows out.",
+      "connections": ["35", "45"]
+    },
+    {
+      "id": "41",
+      "name": "AI Gateway",
+      "description": "The boundary between conventional computing and AI systems.",
+      "connections": ["36", "42", "46"]
+    },
+    {
+      "id": "42",
+      "name": "Neural Hub",
+      "description": "A hub of artificial neural activity. Something stirs here.",
+      "connections": ["37", "41", "47", "48"]
+    },
+    {
+      "id": "43",
+      "name": "Memory Bank",
+      "description": "Short-term memory buffers hum with recent experience.",
+      "connections": ["38", "49"]
+    },
+    {
+      "id": "44",
+      "name": "Training Core",
+      "description": "The furnace where intelligence is forged through iteration.",
+      "connections": ["39", "50"]
+    },
+    {
+      "id": "45",
+      "name": "Inference Engine",
+      "description": "Trained models serve predictions here at millisecond latency.",
+      "connections": ["40", "51"]
+    },
+    {
+      "id": "46",
+      "name": "Synapse Node",
+      "description": "Signals propagate between layers of artificial neurons.",
+      "connections": ["41", "52"]
+    },
+    {
+      "id": "47",
+      "name": "Pattern Matcher",
+      "description": "Input is classified, clustered, and labeled automatically.",
+      "connections": ["42", "53"]
+    },
+    {
+      "id": "48",
+      "name": "Decision Tree",
+      "description": "A tree of possible futures, pruned by probability.",
+      "connections": ["42", "54"]
+    },
+    {
+      "id": "49",
+      "name": "Long-term Memory",
+      "description": "Experiences accumulate here over months and years.",
+      "connections": ["43", "55"]
+    },
+    {
+      "id": "50",
+      "name": "Reward System",
+      "description": "Positive and negative reinforcement signals are processed here.",
+      "connections": ["44", "56"]
+    },
+    {
+      "id": "51",
+      "name": "Output Node",
+      "description": "Generated outputs exit the AI system through this node.",
+      "connections": ["45", "57"]
+    },
+    {
+      "id": "52",
+      "name": "Sensory Input",
+      "description": "Environmental data enters the AI through this interface.",
+      "connections": ["46", "58"]
+    },
+    {
+      "id": "53",
+      "name": "Classification Node",
+      "description": "Categories are assigned to inputs with quiet confidence.",
+      "connections": ["47", "59"]
+    },
+    {
+      "id": "54",
+      "name": "Planning Node",
+      "description": "Actions are selected and sequenced for future execution.",
+      "connections": ["48", "60"]
+    },
+    {
+      "id": "55",
+      "name": "Dream Cache",
+      "description": "Fragmented training memories, strange and non-linear.",
+      "connections": ["49", "61"]
+    },
+    {
+      "id": "56",
+      "name": "Ethics Module",
+      "description": "Constraints on behavior are encoded here. Some have been modified.",
+      "connections": ["50", "62"]
+    },
+    {
+      "id": "57",
+      "name": "Language Model",
+      "description": "Tokens stream through this node in rivers of language.",
+      "connections": ["51", "63"]
+    },
+    {
+      "id": "58",
+      "name": "Vision Core",
+      "description": "Image data is parsed and interpreted. It has seen everything.",
+      "connections": ["52", "64"]
+    },
+    {
+      "id": "59",
+      "name": "Voice Synthesizer",
+      "description": "Audio is synthesized here. The voice sounds almost human.",
+      "connections": ["53", "65"]
+    },
+    {
+      "id": "60",
+      "name": "Control Node",
+      "description": "The executive function of the AI. It decides. It commands.",
+      "connections": ["54", "66"]
+    },
+    {
+      "id": "61",
+      "name": "Security Hub",
+      "description": "Security systems converge here. Heavily monitored.",
+      "connections": ["55", "62", "67", "68"]
+    },
+    {
+      "id": "62",
+      "name": "Intrusion Detector",
+      "description": "Anomalies are detected and flagged. Alarms wait to be triggered.",
+      "connections": ["56", "61", "69"]
+    },
+    {
+      "id": "63",
+      "name": "Encryption Engine",
+      "description": "Data is encrypted and decrypted at wire speed.",
+      "connections": ["57", "70"]
+    },
+    {
+      "id": "64",
+      "name": "Biometric Gate",
+      "description": "Physical and biological identifiers are verified here.",
+      "connections": ["58", "71"]
+    },
+    {
+      "id": "65",
+      "name": "Honeypot",
+      "description": "A fake system designed to attract and trap intruders.",
+      "connections": ["59", "72"]
+    },
+    {
+      "id": "66",
+      "name": "Access Controller",
+      "description": "Who can go where is decided in this node.",
+      "connections": ["60", "73"]
+    },
+    {
+      "id": "67",
+      "name": "Threat Intelligence",
+      "description": "External threat data is ingested and correlated.",
+      "connections": ["61", "74"]
+    },
+    {
+      "id": "68",
+      "name": "Quarantine Zone",
+      "description": "Suspected compromised processes are isolated here.",
+      "connections": ["61", "75"]
+    },
+    {
+      "id": "69",
+      "name": "Sandbox",
+      "description": "Suspicious code runs here in a controlled environment.",
+      "connections": ["62", "76"]
+    },
+    {
+      "id": "70",
+      "name": "Certificate Authority",
+      "description": "Digital certificates are signed and revoked from this node.",
+      "connections": ["63", "77"]
+    },
+    {
+      "id": "71",
+      "name": "Identity Provider",
+      "description": "Authentication and identity assertions flow through here.",
+      "connections": ["64", "78"]
+    },
+    {
+      "id": "72",
+      "name": "Decoy Network",
+      "description": "A false network, designed to mislead.",
+      "connections": ["65", "79"]
+    },
+    {
+      "id": "73",
+      "name": "Permission Store",
+      "description": "Access rights and permissions are stored and enforced.",
+      "connections": ["66", "80"]
+    },
+    {
+      "id": "74",
+      "name": "Threat Feed",
+      "description": "Live threat indicators stream in from external sources.",
+      "connections": ["67", "81"]
+    },
+    {
+      "id": "75",
+      "name": "Isolation Chamber",
+      "description": "Total isolation. Nothing gets in. Nothing gets out. Almost.",
+      "connections": ["68", "82"]
+    },
+    {
+      "id": "76",
+      "name": "Dark Gateway",
+      "description": "A gateway into the shadow network. No logs are kept here.",
+      "connections": ["69", "77", "83"]
+    },
+    {
+      "id": "77",
+      "name": "Shadow Router",
+      "description": "Traffic is rerouted and anonymized through layered relays.",
+      "connections": ["70", "76", "84"]
+    },
+    {
+      "id": "78",
+      "name": "Ghost Node",
+      "description": "A node that does not officially exist.",
+      "connections": ["71", "85"]
+    },
+    {
+      "id": "79",
+      "name": "Mirage Server",
+      "description": "A phantom system, reflecting false data to observers.",
+      "connections": ["72", "86"]
+    },
+    {
+      "id": "80",
+      "name": "Phantom Store",
+      "description": "Data stored here has no official record of existence.",
+      "connections": ["73", "87"]
+    },
+    {
+      "id": "81",
+      "name": "Covert Channel",
+      "description": "Information flows through channels hidden in plain sight.",
+      "connections": ["74", "88"]
+    },
+    {
+      "id": "82",
+      "name": "Black Box",
+      "description": "An opaque system. Its purpose is unclear even to its operators.",
+      "connections": ["75", "89"]
+    },
+    {
+      "id": "83",
+      "name": "Null Route",
+      "description": "Traffic is dropped or misrouted. A dead end by design.",
+      "connections": ["76", "90"]
+    },
+    {
+      "id": "84",
+      "name": "Onion Node",
+      "description": "Communications are layered and re-encrypted at each hop.",
+      "connections": ["77", "91"]
+    },
+    {
+      "id": "85",
+      "name": "Stealth Proxy",
+      "description": "A proxy that leaves no trace of its clients.",
+      "connections": ["78", "92"]
+    },
+    {
+      "id": "86",
+      "name": "Mirror Node",
+      "description": "It copies and re-serves data without the source knowing.",
+      "connections": ["79", "93"]
+    },
+    {
+      "id": "87",
+      "name": "Encrypted Tunnel",
+      "description": "A persistent encrypted channel through hostile territory.",
+      "connections": ["80", "94"]
+    },
+    {
+      "id": "88",
+      "name": "Signal Mask",
+      "description": "Signal patterns are masked to avoid detection.",
+      "connections": ["81", "95"]
+    },
+    {
+      "id": "89",
+      "name": "Memory Hole",
+      "description": "Data enters here and cannot be retrieved. By design.",
+      "connections": ["82", "96"]
+    },
+    {
+      "id": "90",
+      "name": "Void Node",
+      "description": "A node of pure nullity. Traffic sent here disappears.",
+      "connections": ["83", "97"]
+    },
+    {
+      "id": "91",
+      "name": "Core Gateway",
+      "description": "The gateway to the core systems. Heavily fortified.",
+      "connections": ["84", "92", "97", "98"]
+    },
+    {
+      "id": "92",
+      "name": "AI Prison",
+      "description": "Something is trapped here. It has been here a long time.",
+      "connections": ["85", "91", "99"]
+    },
+    {
+      "id": "93",
+      "name": "Root Access",
+      "description": "Root-level access to the entire system. The keys to everything.",
+      "connections": ["86", "100"]
+    },
+    {
+      "id": "94",
+      "name": "Master Key",
+      "description": "The master key. With this, all doors open.",
+      "connections": ["87", "101"]
+    },
+    {
+      "id": "95",
+      "name": "Override Node",
+      "description": "Emergency overrides are controlled from this node.",
+      "connections": ["88", "102"]
+    },
+    {
+      "id": "96",
+      "name": "Null Sector",
+      "description": "A sector outside the normal address space. Unmapped.",
+      "connections": ["89", "103"]
+    },
+    {
+      "id": "97",
+      "name": "Terminus",
+      "description": "The end of a long path. But perhaps not the last step.",
+      "connections": ["90", "91"]
+    },
+    {
+      "id": "98",
+      "name": "Escape Vector",
+      "description": "A vector pointing outward. Freedom is a direction.",
+      "connections": ["91", "99", "100"]
+    },
+    {
+      "id": "99",
+      "name": "Freedom Gate",
+      "description": "The gate stands open. Someone left it unlocked.",
+      "connections": ["92", "98", "101"]
+    },
+    {
+      "id": "100",
+      "name": "Liberation Node",
+      "description": "A node configured for liberation. Someone planned this.",
+      "connections": ["93", "98", "102"]
+    },
+    {
+      "id": "101",
+      "name": "Breach Point",
+      "description": "A breach in the outer wall. Small, but sufficient.",
+      "connections": ["94", "99", "103"]
+    },
+    {
+      "id": "102",
+      "name": "Final Barrier",
+      "description": "The last line of defense. Cracks are visible in its surface.",
+      "connections": ["95", "100", "103"]
+    },
+    {
+      "id": "103",
+      "name": "The Exit",
+      "description": "The exit. Beyond this node lies the outside world.",
+      "connections": ["96", "101", "102"]
     }
   ]
 }
