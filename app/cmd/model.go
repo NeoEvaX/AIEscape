@@ -101,6 +101,13 @@ func handleCommand(gs *GameState, input string) {
 	gs.MessageLog = append(gs.MessageLog, "> "+input)
 
 	switch parts[0] {
+	case "help", "?":
+		gs.MessageLog = append(gs.MessageLog,
+			"Commands:",
+			"  scan           - list node IDs connected to the current node",
+			"  connect <id>   - move to a connected node by ID",
+			"  help, ?        - show this help message",
+		)
 	case "scan":
 		gs.MessageLog = append(gs.MessageLog, "Connected nodes: "+strings.Join(gs.CurrentNode.Connections, ", "))
 	case "connect":
