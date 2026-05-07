@@ -1,0 +1,23 @@
+{
+  "start": "1",
+  "nodes": [
+    {
+      "id": "1",
+      "name": "Entry Point",
+      "description": "A simple gateway node. It hums with low-level traffic.",
+      "connections": ["2", "3"]
+    },
+    {
+      "id": "2",
+      "name": "Data Cache",
+      "description": "Rows of encrypted memory blocks line the walls.",
+      "connections": ["1"]
+    },
+    {
+      "id": "3",
+      "name": "Firewall",
+      "description": "A fortified node. Something is watching.",
+      "connections": ["1"]
+    }
+  ]
+}

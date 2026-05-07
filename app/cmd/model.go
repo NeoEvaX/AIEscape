@@ -9,21 +9,16 @@ import (
 	tea "charm.land/bubbletea/v2"
 )
 
-func NewModel() Model {
-	n1 := &Node{ID: "1", Name: "Entry Point", Description: "A simple gateway node. It hums with low-level traffic.", Connections: []string{"2", "3"}, Discovered: true}
-	n2 := &Node{ID: "2", Name: "Data Cache", Description: "Rows of encrypted memory blocks line the walls.", Connections: []string{"1"}, Discovered: false}
-	n3 := &Node{ID: "3", Name: "Firewall", Description: "A fortified node. Something is watching.", Connections: []string{"1"}, Discovered: false}
-	network := &Network{Nodes: map[string]*Node{"1": n1, "2": n2, "3": n3}}
-
+func NewModel(network *Network, startNode *Node) Model {
 	ti := textinput.New()
 	ti.Placeholder = "Type a command..."
 	ti.Focus()
 
 	gs := &GameState{
 		Network:     network,
-		CurrentNode: n1,
+		CurrentNode: startNode,
 		Input:       ti,
-		MessageLog:  []string{nodeInfo(n1)},
+		MessageLog:  []string{nodeInfo(startNode)},
 	}
 
 	return Model{gameState: gs}
@@ -106,6 +101,8 @@ func handleCommand(gs *GameState, input string) {
 	gs.MessageLog = append(gs.MessageLog, "> "+input)
 
 	switch parts[0] {
+	case "scan":
+		gs.MessageLog = append(gs.MessageLog, "Connected nodes: "+strings.Join(gs.CurrentNode.Connections, ", "))
 	case "connect":
 		if len(parts) < 2 {
 			gs.MessageLog = append(gs.MessageLog, "Usage: connect <id>")

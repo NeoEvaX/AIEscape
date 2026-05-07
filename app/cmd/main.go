@@ -7,7 +7,12 @@ import (
 )
 
 func main() {
-	p := tea.NewProgram(NewModel())
+	network, startNode, err := loadNetwork("network.json")
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	p := tea.NewProgram(NewModel(network, startNode))
 
 	if _, err := p.Run(); err != nil {
 		log.Fatal(err)
