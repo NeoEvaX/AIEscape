@@ -88,12 +88,19 @@ func newGameStateFromSave(network *Network, save *Save, currentNode *Node, visit
 
 // ── Game logic ────────────────────────────────────────────────────────────────
 
-// handleCommand processes user input. Returns true if the player moved nodes
-// (i.e., the save should be persisted).
-func (gs *GameState) handleCommand(input string) bool {
+type gameAction int
+
+const (
+	actionNone  gameAction = iota
+	actionMoved            // player moved nodes; save should be persisted
+	actionQuit             // player wants to return to main menu
+)
+
+// handleCommand processes user input and returns the resulting action.
+func (gs *GameState) handleCommand(input string) gameAction {
 	parts := strings.Fields(input)
 	if len(parts) == 0 {
-		return false
+		return actionNone
 	}
 
 	gs.MessageLog = append(gs.MessageLog, "> "+input)
@@ -102,9 +109,10 @@ func (gs *GameState) handleCommand(input string) bool {
 	case "help", "?":
 		gs.MessageLog = append(gs.MessageLog,
 			"Commands:",
-			"  scan           - list node IDs connected to the current node",
-			"  connect <id>   - move to a connected node by ID",
-			"  help, ?        - show this help message",
+			"  scan              - list node IDs connected to the current node",
+			"  connect <id>      - move to a connected node by ID",
+			"  quit, exit        - return to the main menu",
+			"  help, ?           - show this help message",
 		)
 
 	case "scan":
@@ -113,29 +121,32 @@ func (gs *GameState) handleCommand(input string) bool {
 	case "connect":
 		if len(parts) < 2 {
 			gs.MessageLog = append(gs.MessageLog, "Usage: connect <id>")
-			return false
+			return actionNone
 		}
 		targetID := parts[1]
 		target, exists := gs.Network.Nodes[targetID]
 		if !exists {
 			gs.MessageLog = append(gs.MessageLog, fmt.Sprintf("Node %q does not exist.", targetID))
-			return false
+			return actionNone
 		}
 		if !gs.Network.CanReach(gs.CurrentNode.ID, targetID) {
 			gs.MessageLog = append(gs.MessageLog, fmt.Sprintf("No direct connection to node %s from here.", targetID))
-			return false
+			return actionNone
 		}
 		target.Discovered = true
 		gs.CurrentNode = target
 		gs.VisitedNodes[target.ID] = true
 		gs.MessageLog = append(gs.MessageLog, nodeInfo(target))
-		return true
+		return actionMoved
+
+	case "quit", "exit":
+		return actionQuit
 
 	default:
 		gs.MessageLog = append(gs.MessageLog, fmt.Sprintf("Unknown command: %q", parts[0]))
 	}
 
-	return false
+	return actionNone
 }
 
 func (gs *GameState) visitedList() []string {

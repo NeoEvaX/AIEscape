@@ -37,7 +37,8 @@ type AppModel struct {
 	savesErr   string
 
 	// Game
-	gs *GameState
+	gs                 *GameState
+	awaitingQuitConfirm bool
 }
 
 func NewAppModel(db *Database, network *Network) AppModel {
@@ -325,6 +326,19 @@ func (m AppModel) updateGame(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case gameSavedMsg:
 		return m, nil
 	case tea.KeyPressMsg:
+		// Intercept confirmation prompt before normal input handling.
+		if m.awaitingQuitConfirm {
+			switch msg.String() {
+			case "y", "Y":
+				m.awaitingQuitConfirm = false
+				m.gs = nil
+				m.screen = ScreenMainMenu
+			case "n", "N", "esc":
+				m.awaitingQuitConfirm = false
+			}
+			return m, nil
+		}
+
 		switch msg.String() {
 		case "ctrl+c":
 			return m, tea.Quit
@@ -332,9 +346,11 @@ func (m AppModel) updateGame(msg tea.Msg) (tea.Model, tea.Cmd) {
 			input := strings.TrimSpace(gs.Input.Value())
 			gs.Input.SetValue("")
 			if input != "" {
-				moved := gs.handleCommand(input)
-				if moved {
+				switch gs.handleCommand(input) {
+				case actionMoved:
 					return m, persistSaveCmd(m.db, gs.SaveID, gs.CurrentNode.ID, gs.visitedList())
+				case actionQuit:
+					m.awaitingQuitConfirm = true
 				}
 			}
 			return m, nil
@@ -354,6 +370,10 @@ func (m AppModel) viewGame() string {
 		b.WriteString(line + "\n")
 	}
 	b.WriteByte('\n')
-	b.WriteString(gs.Input.View())
+	if m.awaitingQuitConfirm {
+		b.WriteString("  Return to main menu? [y/n] ")
+	} else {
+		b.WriteString(gs.Input.View())
+	}
 	return b.String()
 }
