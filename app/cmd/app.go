@@ -217,15 +217,25 @@ func deleteSaveCmd(db *Database, id int64) tea.Cmd {
 }
 
 type saveLoadedMsg struct {
-	save    *Save
-	visited []string
-	err     error
+	save             *Save
+	visited          []string
+	inventory        []Item
+	deletedNodeFiles []string
+	err              error
 }
 
 func loadSaveCmd(db *Database, id int64) tea.Cmd {
 	return func() tea.Msg {
 		save, visited, err := db.LoadSave(id)
-		return saveLoadedMsg{save: save, visited: visited, err: err}
+		if err != nil {
+			return saveLoadedMsg{err: err}
+		}
+		inventory, err := db.GetInventory(id)
+		if err != nil {
+			return saveLoadedMsg{err: err}
+		}
+		deleted, err := db.GetDeletedNodeFiles(id)
+		return saveLoadedMsg{save: save, visited: visited, inventory: inventory, deletedNodeFiles: deleted, err: err}
 	}
 }
 
@@ -253,7 +263,7 @@ func (m AppModel) updateLoadSave(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		currentNode := m.network.Nodes[msg.save.CurrentNodeID]
-		m.gs = newGameStateFromSave(m.network, msg.save, currentNode, msg.visited)
+		m.gs = newGameStateFromSave(m.network, msg.save, currentNode, msg.visited, msg.deletedNodeFiles, msg.inventory)
 		m.screen = ScreenGame
 		return m, nil
 
@@ -314,9 +324,14 @@ func (m AppModel) viewLoadSave() string {
 
 type gameSavedMsg struct{ err error }
 
-func persistSaveCmd(db *Database, saveID int64, currentNodeID string, visited []string) tea.Cmd {
+func persistSaveCmd(db *Database, gs *GameState) tea.Cmd {
+	saveID := gs.SaveID
+	currentNodeID := gs.CurrentNode.ID
+	visited := gs.visitedList()
+	deleted := gs.deletedFilesList()
+	inventory := gs.inventoryIDs()
 	return func() tea.Msg {
-		return gameSavedMsg{err: db.UpdateSave(saveID, currentNodeID, visited)}
+		return gameSavedMsg{err: db.UpdateSave(saveID, currentNodeID, visited, deleted, inventory)}
 	}
 }
 
@@ -347,8 +362,8 @@ func (m AppModel) updateGame(msg tea.Msg) (tea.Model, tea.Cmd) {
 			gs.Input.SetValue("")
 			if input != "" {
 				switch gs.handleCommand(input) {
-				case actionMoved:
-					return m, persistSaveCmd(m.db, gs.SaveID, gs.CurrentNode.ID, gs.visitedList())
+				case actionPersist:
+					return m, persistSaveCmd(m.db, gs)
 				case actionQuit:
 					m.awaitingQuitConfirm = true
 				}

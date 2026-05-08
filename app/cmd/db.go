@@ -34,22 +34,104 @@ func OpenDatabase(path string) (*Database, error) {
 }
 
 func (d *Database) migrate() error {
-	_, err := d.conn.Exec(`
-		CREATE TABLE IF NOT EXISTS saves (
-			id             INTEGER PRIMARY KEY AUTOINCREMENT,
-			name           TEXT    UNIQUE NOT NULL,
-			current_node_id TEXT   NOT NULL,
-			updated_at     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
-		);
-		CREATE TABLE IF NOT EXISTS visited_nodes (
-			save_id INTEGER NOT NULL REFERENCES saves(id) ON DELETE CASCADE,
-			node_id TEXT    NOT NULL,
+	stmts := []string{
+		`PRAGMA foreign_keys = ON`,
+		`CREATE TABLE IF NOT EXISTS saves (
+			id               INTEGER  PRIMARY KEY AUTOINCREMENT,
+			name             TEXT     UNIQUE NOT NULL,
+			current_node_id  TEXT     NOT NULL,
+			updated_at       DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+		)`,
+		`CREATE TABLE IF NOT EXISTS visited_nodes (
+			save_id  INTEGER NOT NULL REFERENCES saves(id) ON DELETE CASCADE,
+			node_id  TEXT    NOT NULL,
 			PRIMARY KEY (save_id, node_id)
-		);
-		PRAGMA foreign_keys = ON;
-	`)
+		)`,
+		// World-level item definitions synced from network.json on startup.
+		`CREATE TABLE IF NOT EXISTS items (
+			id       TEXT PRIMARY KEY,
+			name     TEXT NOT NULL,
+			type     TEXT NOT NULL,
+			payload  TEXT NOT NULL
+		)`,
+		// Files the player has assimilated into their inventory.
+		`CREATE TABLE IF NOT EXISTS save_items (
+			save_id  INTEGER NOT NULL REFERENCES saves(id) ON DELETE CASCADE,
+			item_id  TEXT    NOT NULL,
+			PRIMARY KEY (save_id, item_id)
+		)`,
+		// Files the player has deleted from nodes (per-save).
+		`CREATE TABLE IF NOT EXISTS save_deleted_node_files (
+			save_id  INTEGER NOT NULL REFERENCES saves(id) ON DELETE CASCADE,
+			item_id  TEXT    NOT NULL,
+			PRIMARY KEY (save_id, item_id)
+		)`,
+	}
+	for _, s := range stmts {
+		if _, err := d.conn.Exec(s); err != nil {
+			return fmt.Errorf("migration failed (%s...): %w", s[:min(40, len(s))], err)
+		}
+	}
+	return nil
+}
+
+// ── Items ─────────────────────────────────────────────────────────────────────
+
+func (d *Database) UpsertItem(item Item) error {
+	_, err := d.conn.Exec(
+		`INSERT OR REPLACE INTO items (id, name, type, payload) VALUES (?, ?, ?, ?)`,
+		item.ID, item.Name, string(item.Type), string(item.Payload),
+	)
 	return err
 }
+
+func (d *Database) GetInventory(saveID int64) ([]Item, error) {
+	rows, err := d.conn.Query(`
+		SELECT i.id, i.name, i.type, i.payload
+		FROM items i
+		JOIN save_items si ON si.item_id = i.id
+		WHERE si.save_id = ?
+		ORDER BY i.name
+	`, saveID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var items []Item
+	for rows.Next() {
+		var item Item
+		var payload string
+		if err := rows.Scan(&item.ID, &item.Name, &item.Type, &payload); err != nil {
+			return nil, err
+		}
+		item.Payload = []byte(payload)
+		items = append(items, item)
+	}
+	return items, rows.Err()
+}
+
+func (d *Database) GetDeletedNodeFiles(saveID int64) ([]string, error) {
+	rows, err := d.conn.Query(
+		`SELECT item_id FROM save_deleted_node_files WHERE save_id = ?`, saveID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var ids []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	return ids, rows.Err()
+}
+
+// ── Saves ─────────────────────────────────────────────────────────────────────
 
 func (d *Database) ListSaves() ([]Save, error) {
 	rows, err := d.conn.Query(`
@@ -126,7 +208,8 @@ func (d *Database) LoadSave(id int64) (*Save, []string, error) {
 	return &s, visited, rows.Err()
 }
 
-func (d *Database) UpdateSave(id int64, currentNodeID string, visitedNodeIDs []string) error {
+// UpdateSave persists all mutable save state in a single transaction.
+func (d *Database) UpdateSave(saveID int64, currentNodeID string, visited, deletedNodeFiles, inventoryIDs []string) error {
 	tx, err := d.conn.Begin()
 	if err != nil {
 		return err
@@ -135,21 +218,24 @@ func (d *Database) UpdateSave(id int64, currentNodeID string, visitedNodeIDs []s
 
 	if _, err := tx.Exec(
 		`UPDATE saves SET current_node_id = ?, updated_at = ? WHERE id = ?`,
-		currentNodeID, time.Now(), id,
+		currentNodeID, time.Now(), saveID,
 	); err != nil {
 		return err
 	}
 
-	if _, err := tx.Exec(`DELETE FROM visited_nodes WHERE save_id = ?`, id); err != nil {
-		return err
-	}
-	for _, nodeID := range visitedNodeIDs {
-		if _, err := tx.Exec(`INSERT INTO visited_nodes (save_id, node_id) VALUES (?, ?)`, id, nodeID); err != nil {
-			return err
-		}
-	}
+	replaceList(tx, `visited_nodes`, `node_id`, saveID, visited)
+	replaceList(tx, `save_deleted_node_files`, `item_id`, saveID, deletedNodeFiles)
+	replaceList(tx, `save_items`, `item_id`, saveID, inventoryIDs)
 
 	return tx.Commit()
+}
+
+// replaceList deletes all rows for saveID in table and reinserts them.
+func replaceList(tx *sql.Tx, table, col string, saveID int64, values []string) {
+	tx.Exec(`DELETE FROM `+table+` WHERE save_id = ?`, saveID)
+	for _, v := range values {
+		tx.Exec(`INSERT OR IGNORE INTO `+table+` (save_id, `+col+`) VALUES (?, ?)`, saveID, v)
+	}
 }
 
 func (d *Database) DeleteSave(id int64) error {
@@ -159,4 +245,11 @@ func (d *Database) DeleteSave(id int64) error {
 
 func (d *Database) Close() error {
 	return d.conn.Close()
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }

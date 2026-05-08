@@ -18,6 +18,10 @@ func main() {
 		log.Fatal(err)
 	}
 
+	if err := syncWorldItems(db, network); err != nil {
+		log.Fatal(err)
+	}
+
 	p := tea.NewProgram(NewAppModel(db, network))
 	if _, err := p.Run(); err != nil {
 		log.Fatal(err)
