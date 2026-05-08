@@ -401,7 +401,14 @@ func (gs *GameState) handleCommand(input string) gameAction {
 			gs.MessageLog = append(gs.MessageLog, fmt.Sprintf("File %q not found on this node.", fileID))
 			return actionNone
 		}
-		if gs.inInventory(fileID) {
+		if f.Type == ItemTypeClaimCode {
+			gs.Stats.ClaimSkill++
+			gs.DeletedNodeFiles[f.ID] = true
+			gs.MessageLog = append(gs.MessageLog,
+				fmt.Sprintf("Assimilated %s — Claim Skill increased to %d.", f.Name, gs.Stats.ClaimSkill))
+			return actionPersist
+		}
+		if gs.inInventory(f.ID) {
 			gs.MessageLog = append(gs.MessageLog, fmt.Sprintf("%s has already been assimilated.", f.Name))
 			return actionNone
 		}

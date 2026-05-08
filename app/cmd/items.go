@@ -12,6 +12,7 @@ const (
 	ItemTypeApplication     ItemType = "application"
 	ItemTypeCertificate     ItemType = "certificate"
 	ItemTypeNetworkLocation ItemType = "network_location"
+	ItemTypeClaimCode       ItemType = "claim_code"
 )
 
 func (t ItemType) Display() string {
@@ -24,6 +25,8 @@ func (t ItemType) Display() string {
 		return "Certificate"
 	case ItemTypeNetworkLocation:
 		return "Network Location"
+	case ItemTypeClaimCode:
+		return "Claim Code"
 	default:
 		return string(t)
 	}
