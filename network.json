@@ -63,6 +63,15 @@
             "text": "Displays a persistent status bar showing current node, player stats, and network progress.",
             "action": "status_menu"
           }
+        },
+        {
+          "id": "f-1-7",
+          "name": "scan_network.app",
+          "type": "application",
+          "payload": {
+            "text": "Scans for nodes connected to the current location and reports their IDs.",
+            "action": "scan_network"
+          }
         }
       ],
       "ram": 32,

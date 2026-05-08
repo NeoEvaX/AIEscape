@@ -290,6 +290,20 @@ func (gs *GameState) sshKeysForNode(node *Node) []Item {
 	return keys
 }
 
+// hasScanNetwork returns true if the player has an application with action "scan_network".
+func (gs *GameState) hasScanNetwork() bool {
+	for _, item := range gs.Inventory {
+		if item.Type != ItemTypeApplication {
+			continue
+		}
+		p, err := item.AsApplication()
+		if err == nil && p.Action == "scan_network" {
+			return true
+		}
+	}
+	return false
+}
+
 // hasStatusMenu returns true if the player has an application with action "status_menu".
 func (gs *GameState) hasStatusMenu() bool {
 	for _, item := range gs.Inventory {
@@ -469,9 +483,11 @@ func (gs *GameState) handleCommand(input string) gameAction {
 	// ── Help ──────────────────────────────────────────────────────────────────
 
 	case "help", "?":
-		gs.MessageLog = append(gs.MessageLog,
-			"Commands:",
-			"  scan                  - list node IDs connected to the current node",
+		cmds := []string{"Commands:"}
+		if gs.hasScanNetwork() {
+			cmds = append(cmds, "  scan                  - list node IDs connected to the current node")
+		}
+		cmds = append(cmds,
 			"  connect <id>          - move to a connected node by ID",
 			"  ls, list              - list files on the current node",
 			"  assimilate <name>     - copy a file from this node (or open email) into inventory",
@@ -491,10 +507,15 @@ func (gs *GameState) handleCommand(input string) gameAction {
 			"  quit, exit            - return to the main menu",
 			"  help, ?               - show this help message",
 		)
+		gs.MessageLog = append(gs.MessageLog, cmds...)
 
 	// ── Navigation ────────────────────────────────────────────────────────────
 
 	case "scan":
+		if !gs.hasScanNetwork() {
+			gs.MessageLog = append(gs.MessageLog, fmt.Sprintf("Unknown command: %q", parts[0]))
+			return actionNone
+		}
 		gs.OpenCtx = openContextNode
 		var visible []string
 		for _, id := range gs.CurrentNode.Connections {
