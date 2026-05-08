@@ -290,47 +290,133 @@ func (gs *GameState) sshKeysForNode(node *Node) []Item {
 	return keys
 }
 
-// hasScanNetwork returns true if the player has an application with action "scan_network".
+// hasScanNetwork returns true if the player has the base scan_network.app.
 func (gs *GameState) hasScanNetwork() bool {
+	return gs.hasAppAction("scan_network")
+}
+
+// hasScanNetworkV2 returns true if the player has scan_network_v2.app.
+func (gs *GameState) hasScanNetworkV2() bool {
+	return gs.hasAppAction("scan_network_v2")
+}
+
+// hasScanNetworkV3 returns true if the player has scan_network_v3.app.
+func (gs *GameState) hasScanNetworkV3() bool {
+	return gs.hasAppAction("scan_network_v3")
+}
+
+// canScan returns true if the player has any version of the scan app.
+func (gs *GameState) canScan() bool {
+	return gs.hasScanNetwork() || gs.hasScanNetworkV2() || gs.hasScanNetworkV3()
+}
+
+// hasAppAction returns true if inventory contains an application with the given action.
+func (gs *GameState) hasAppAction(action string) bool {
 	for _, item := range gs.Inventory {
 		if item.Type != ItemTypeApplication {
 			continue
 		}
 		p, err := item.AsApplication()
-		if err == nil && p.Action == "scan_network" {
+		if err == nil && p.Action == action {
 			return true
 		}
 	}
 	return false
+}
+
+// visibleConnections returns the nodes connected to n that the player can see.
+func (gs *GameState) visibleConnections(node *Node) []*Node {
+	var result []*Node
+	for _, id := range node.Connections {
+		n, ok := gs.Network.Nodes[id]
+		if !ok {
+			continue
+		}
+		if n.Dark && !gs.hasLocationFile(id) {
+			continue
+		}
+		result = append(result, n)
+	}
+	return result
+}
+
+// nodeScanTags returns a short tag string for display in scan output.
+func (gs *GameState) nodeScanTags(n *Node) string {
+	var tags []string
+	if n.ID == gs.CurrentNode.ID {
+		tags = append(tags, "◈")
+	} else if gs.VisitedNodes[n.ID] {
+		tags = append(tags, "✓")
+	}
+	if n.Password != "" || len(n.SSHUsers) > 0 {
+		tags = append(tags, "⚿")
+	}
+	if len(tags) == 0 {
+		return ""
+	}
+	return "  " + strings.Join(tags, " ")
+}
+
+// renderScanTree renders a tree view of nodes reachable within `depth` hops.
+// depth=1 shows direct connections; depth=2 also shows their connections.
+func (gs *GameState) renderScanTree(depth int) []string {
+	cur := gs.CurrentNode
+	children := gs.visibleConnections(cur)
+
+	// Root box — width adapts to node label length.
+	rootLabel := fmt.Sprintf("◈  [%s]  %s", cur.ID, cur.Name)
+	inner := len(rootLabel) + 4
+	lines := []string{
+		"  ┌" + strings.Repeat("─", inner) + "┐",
+		"  │  " + rootLabel + "  │",
+		"  └" + strings.Repeat("─", inner) + "┘",
+	}
+
+	if len(children) == 0 {
+		lines = append(lines, "       (no connected nodes visible)")
+		return lines
+	}
+
+	lines = append(lines, "       │")
+
+	for i, child := range children {
+		isLast := i == len(children)-1
+		conn := "├── "
+		if isLast {
+			conn = "└── "
+		}
+		lines = append(lines, fmt.Sprintf("       %s[%s]  %s%s",
+			conn, child.ID, child.Name, gs.nodeScanTags(child)))
+
+		if depth < 2 {
+			continue
+		}
+
+		grandchildren := gs.visibleConnections(child)
+		// Vertical continuation for the parent branch.
+		contPrefix := "       │    "
+		if isLast {
+			contPrefix = "            "
+		}
+		for j, gc := range grandchildren {
+			isLastGC := j == len(grandchildren)-1
+			gcConn := "├── "
+			if isLastGC {
+				gcConn = "└── "
+			}
+			lines = append(lines, fmt.Sprintf("%s%s[%s]  %s%s",
+				contPrefix, gcConn, gc.ID, gc.Name, gs.nodeScanTags(gc)))
+		}
+	}
+
+	return lines
 }
 
 // hasStatusMenu returns true if the player has an application with action "status_menu".
-func (gs *GameState) hasStatusMenu() bool {
-	for _, item := range gs.Inventory {
-		if item.Type != ItemTypeApplication {
-			continue
-		}
-		p, err := item.AsApplication()
-		if err == nil && p.Action == "status_menu" {
-			return true
-		}
-	}
-	return false
-}
+func (gs *GameState) hasStatusMenu() bool { return gs.hasAppAction("status_menu") }
 
 // hasSSHBreak returns true if the player has an application with action "ssh_break".
-func (gs *GameState) hasSSHBreak() bool {
-	for _, item := range gs.Inventory {
-		if item.Type != ItemTypeApplication {
-			continue
-		}
-		p, err := item.AsApplication()
-		if err == nil && p.Action == "ssh_break" {
-			return true
-		}
-	}
-	return false
-}
+func (gs *GameState) hasSSHBreak() bool { return gs.hasAppAction("ssh_break") }
 
 // hasLocationFile returns true if inventory contains a network_location file
 // pointing to the given node ID.
@@ -484,8 +570,8 @@ func (gs *GameState) handleCommand(input string) gameAction {
 
 	case "help", "?":
 		cmds := []string{"Commands:"}
-		if gs.hasScanNetwork() {
-			cmds = append(cmds, "  scan                  - list node IDs connected to the current node")
+		if gs.canScan() {
+			cmds = append(cmds, "  scan                  - list nodes connected to the current node")
 		}
 		cmds = append(cmds,
 			"  connect <id>          - move to a connected node by ID",
@@ -512,23 +598,31 @@ func (gs *GameState) handleCommand(input string) gameAction {
 	// ── Navigation ────────────────────────────────────────────────────────────
 
 	case "scan":
-		if !gs.hasScanNetwork() {
+		if !gs.canScan() {
 			gs.MessageLog = append(gs.MessageLog, fmt.Sprintf("Unknown command: %q", parts[0]))
 			return actionNone
 		}
 		gs.OpenCtx = openContextNode
-		var visible []string
-		for _, id := range gs.CurrentNode.Connections {
-			node, ok := gs.Network.Nodes[id]
-			if ok && node.Dark && !gs.hasLocationFile(id) {
-				continue
+		switch {
+		case gs.hasScanNetworkV3():
+			gs.MessageLog = append(gs.MessageLog, gs.renderScanTree(2)...)
+		case gs.hasScanNetworkV2():
+			gs.MessageLog = append(gs.MessageLog, gs.renderScanTree(1)...)
+		default:
+			// v1: plain text list
+			var visible []string
+			for _, id := range gs.CurrentNode.Connections {
+				node, ok := gs.Network.Nodes[id]
+				if ok && node.Dark && !gs.hasLocationFile(id) {
+					continue
+				}
+				visible = append(visible, id)
 			}
-			visible = append(visible, id)
-		}
-		if len(visible) == 0 {
-			gs.MessageLog = append(gs.MessageLog, "No nodes detected.")
-		} else {
-			gs.MessageLog = append(gs.MessageLog, "Connected nodes: "+strings.Join(visible, ", "))
+			if len(visible) == 0 {
+				gs.MessageLog = append(gs.MessageLog, "No nodes detected.")
+			} else {
+				gs.MessageLog = append(gs.MessageLog, "Connected nodes: "+strings.Join(visible, ", "))
+			}
 		}
 
 	case "connect":

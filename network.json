@@ -10,6 +10,7 @@
         "3",
         "4",
         "16",
+        "22",
         "104",
         "105"
       ],
@@ -244,6 +245,15 @@
           "name": "fw3_creds.pass",
           "type": "password",
           "payload": { "node_id": "3", "password": "s3cur1ty" }
+        },
+        {
+          "id": "f-5-5",
+          "name": "scan_network_v2.app",
+          "type": "application",
+          "payload": {
+            "text": "Enhanced network scanner. Renders connected nodes as a visual ASCII graph.",
+            "action": "scan_network_v2"
+          }
         }
       ],
       "ram": 32,
@@ -914,6 +924,15 @@
           "type": "network_location",
           "payload": {
             "node_id": "26"
+          }
+        },
+        {
+          "id": "f-22-4",
+          "name": "scan_network_v3.app",
+          "type": "application",
+          "payload": {
+            "text": "Deep network scanner. Maps two hops from current node, revealing the full local topology.",
+            "action": "scan_network_v3"
           }
         }
       ],
