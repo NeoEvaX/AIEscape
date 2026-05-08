@@ -38,6 +38,7 @@ func isSectionLine(line string) bool {
 		"Files on ", "Connected nodes", "Commands:", "Player stats:",
 		"Assimilated files", "Location files", "No files", "No nodes detected",
 		"No saves", "No location", "No files assimilated",
+		"Inbox — ", "Attachments:",
 	} {
 		if strings.HasPrefix(line, prefix) {
 			return true
@@ -80,9 +81,13 @@ func classifyAndRender(line string) string {
 		return styleNodeHeader.Render(line)
 	case strings.HasPrefix(line, "── "):
 		return styleFileHeader.Render(line)
+	case strings.HasPrefix(line, "────"):
+		return styleDivider.Render(line)
 	case strings.HasPrefix(line, "RAM: ") || strings.HasPrefix(line, "  RAM:") ||
 		strings.HasPrefix(line, "  CPU:") || strings.HasPrefix(line, "  Claim"):
 		return styleDetail.Render(line)
+	case strings.HasPrefix(line, "  [Personal Computer"):
+		return styleSection.Render(line)
 	case isSectionLine(line):
 		return styleSection.Render(line)
 	case strings.HasPrefix(line, "  "):

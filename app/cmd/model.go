@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"charm.land/bubbles/v2/textinput"
@@ -11,17 +12,29 @@ import (
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
+// Email represents a mail message stored on a personal computer node.
+type Email struct {
+	ID          string
+	From        string
+	To          string
+	Subject     string
+	Body        string
+	Attachments []Item
+}
+
 type Node struct {
 	ID          string
 	Name        string
 	Description string
 	Connections []string
 	Files       []Item
-	RAM         int    // 1–255
-	CPU         int    // 1–255
-	Dark        bool   // dark nodes are hidden from scan unless player has the location file
+	RAM         int      // 1–255
+	CPU         int      // 1–255
+	Dark        bool     // dark nodes are hidden from scan unless player has the location file
 	Password    string   // empty = no password required
 	SSHUsers    []string // non-empty = SSH auth required; lists allowed usernames
+	Owner       string   // non-empty = personal computer; owner's email address
+	Emails      []Email  // mail stored on this PC node
 	Discovered  bool
 }
 
@@ -75,6 +88,9 @@ type GameState struct {
 
 	// Pending auth target (set before returning actionConnectAuth, cleared by app.go)
 	PendingConnectNode *Node
+
+	// Open email ID on the current node (resets on node change)
+	OpenEmailID string
 }
 
 // ── Constructors ──────────────────────────────────────────────────────────────
@@ -303,6 +319,27 @@ func (gs *GameState) hasLocationFile(nodeID string) bool {
 	return false
 }
 
+// findEmailAttachment looks up an attachment in the currently-open email by name or ID.
+func (gs *GameState) findEmailAttachment(query string) *Item {
+	if gs.OpenEmailID == "" {
+		return nil
+	}
+	for i := range gs.CurrentNode.Emails {
+		e := &gs.CurrentNode.Emails[i]
+		if e.ID != gs.OpenEmailID {
+			continue
+		}
+		for j := range e.Attachments {
+			a := &e.Attachments[j]
+			if strings.EqualFold(a.Name, query) || a.ID == query {
+				return a
+			}
+		}
+		return nil
+	}
+	return nil
+}
+
 // tabComplete attempts to complete the current input.
 // Returns the completed string and true if a unique match was found.
 func (gs *GameState) tabComplete(input string) (string, bool) {
@@ -337,6 +374,21 @@ func (gs *GameState) tabComplete(input string) (string, bool) {
 		}
 		return names
 	}
+	assimilateNames := func() []string {
+		names := nodeNames()
+		// Also include open email attachment names.
+		if gs.OpenEmailID != "" {
+			for _, e := range gs.CurrentNode.Emails {
+				if e.ID == gs.OpenEmailID {
+					for _, a := range e.Attachments {
+						names = append(names, a.Name)
+					}
+					break
+				}
+			}
+		}
+		return names
+	}
 
 	// Determine open's source based on context.
 	openSource := nodeNames
@@ -350,7 +402,7 @@ func (gs *GameState) tabComplete(input string) (string, bool) {
 		{"open ", openSource},
 		{"delete ", deletableNames},
 		{"rm ", invNames},
-		{"assimilate ", nodeNames},
+		{"assimilate ", assimilateNames},
 	}
 
 	for _, r := range rules {
@@ -408,7 +460,7 @@ func (gs *GameState) handleCommand(input string) gameAction {
 			"  scan                  - list node IDs connected to the current node",
 			"  connect <id>          - move to a connected node by ID",
 			"  ls, list              - list files on the current node",
-			"  assimilate <name>     - copy a file from this node into your inventory",
+			"  assimilate <name>     - copy a file from this node (or open email) into inventory",
 			"  delete <name>         - permanently delete a file from this node",
 			"  inventory, inv        - list your assimilated files",
 			"  locs                  - list your assimilated location files",
@@ -418,6 +470,8 @@ func (gs *GameState) handleCommand(input string) gameAction {
 			"  open -n <name>        - force open from current node",
 			"  open -i <name>        - force open from inventory",
 			"  rm <name>             - remove a file from your inventory",
+			"  mail                  - list emails on this node (personal computers only)",
+			"  read <n>              - read email number n",
 			"  claim                 - claim CPU and RAM from the current node",
 			"  stats                 - show player stats",
 			"  quit, exit            - return to the main menu",
@@ -472,6 +526,7 @@ func (gs *GameState) handleCommand(input string) gameAction {
 		gs.CurrentNode = target
 		gs.VisitedNodes[target.ID] = true
 		gs.OpenCtx = openContextNode
+		gs.OpenEmailID = ""
 		gs.MessageLog = append(gs.MessageLog, nodeInfo(target))
 		return actionPersist
 
@@ -499,10 +554,24 @@ func (gs *GameState) handleCommand(input string) gameAction {
 
 	case "assimilate":
 		if len(parts) < 2 {
-			gs.MessageLog = append(gs.MessageLog, "Usage: assimilate <id>")
+			gs.MessageLog = append(gs.MessageLog, "Usage: assimilate <name>")
 			return actionNone
 		}
 		query := parts[1]
+
+		// If an email is open, check its attachments first.
+		if gs.OpenEmailID != "" {
+			if a := gs.findEmailAttachment(query); a != nil {
+				if gs.inInventory(a.ID) {
+					gs.MessageLog = append(gs.MessageLog, fmt.Sprintf("%s has already been assimilated.", a.Name))
+					return actionNone
+				}
+				gs.Inventory = append(gs.Inventory, *a)
+				gs.MessageLog = append(gs.MessageLog, fmt.Sprintf("Assimilated: %s (%s)", a.Name, a.Type.Display()))
+				return actionPersist
+			}
+		}
+
 		f := gs.findNodeFile(query)
 		if f == nil {
 			gs.MessageLog = append(gs.MessageLog, fmt.Sprintf("File %q not found on this node.", query))
@@ -685,6 +754,67 @@ func (gs *GameState) handleCommand(input string) gameAction {
 			}
 		}
 
+	// ── Mail ─────────────────────────────────────────────────────────────────
+
+	case "mail":
+		if gs.CurrentNode.Owner == "" {
+			gs.MessageLog = append(gs.MessageLog, "This node has no mail system.")
+			return actionNone
+		}
+		gs.OpenEmailID = ""
+		if len(gs.CurrentNode.Emails) == 0 {
+			gs.MessageLog = append(gs.MessageLog,
+				fmt.Sprintf("Inbox — %s (no messages)", gs.CurrentNode.Owner))
+			return actionNone
+		}
+		gs.MessageLog = append(gs.MessageLog,
+			fmt.Sprintf("Inbox — %s (%d messages)", gs.CurrentNode.Owner, len(gs.CurrentNode.Emails)))
+		for i, e := range gs.CurrentNode.Emails {
+			attachLabel := ""
+			if len(e.Attachments) == 1 {
+				attachLabel = "  [1 attachment]"
+			} else if len(e.Attachments) > 1 {
+				attachLabel = fmt.Sprintf("  [%d attachments]", len(e.Attachments))
+			}
+			gs.MessageLog = append(gs.MessageLog,
+				fmt.Sprintf("  %d. From: %-28s %s%s", i+1, e.From, e.Subject, attachLabel))
+		}
+		gs.MessageLog = append(gs.MessageLog, "  use 'read <n>' to open an email")
+
+	case "read":
+		if gs.CurrentNode.Owner == "" {
+			gs.MessageLog = append(gs.MessageLog, "This node has no mail system.")
+			return actionNone
+		}
+		if len(parts) < 2 {
+			gs.MessageLog = append(gs.MessageLog, "Usage: read <number>")
+			return actionNone
+		}
+		n, err := strconv.Atoi(parts[1])
+		if err != nil || n < 1 || n > len(gs.CurrentNode.Emails) {
+			gs.MessageLog = append(gs.MessageLog,
+				fmt.Sprintf("Invalid email number. Use 'mail' to list emails (1–%d).", len(gs.CurrentNode.Emails)))
+			return actionNone
+		}
+		email := &gs.CurrentNode.Emails[n-1]
+		gs.OpenEmailID = email.ID
+		lines := []string{
+			fmt.Sprintf("── Email %d / %d ──", n, len(gs.CurrentNode.Emails)),
+			fmt.Sprintf("  From:    %s", email.From),
+			fmt.Sprintf("  To:      %s", email.To),
+			fmt.Sprintf("  Subject: %s", email.Subject),
+			"  ────────────────────────────────────────",
+			email.Body,
+		}
+		if len(email.Attachments) > 0 {
+			lines = append(lines, "Attachments:")
+			for _, a := range email.Attachments {
+				lines = append(lines,
+					fmt.Sprintf("  %-26s (%s)  — assimilate %s", a.Name, a.Type.Display(), a.Name))
+			}
+		}
+		gs.MessageLog = append(gs.MessageLog, strings.Join(lines, "\n"))
+
 	// ── Claim ─────────────────────────────────────────────────────────────────
 
 	case "claim":
@@ -739,5 +869,13 @@ func (gs *GameState) openItem(item *Item) {
 }
 
 func nodeInfo(n *Node) string {
-	return fmt.Sprintf("[Node %s] %s\n%s\nRAM: %d  CPU: %d", n.ID, n.Name, n.Description, n.RAM, n.CPU)
+	base := fmt.Sprintf("[Node %s] %s\n%s\nRAM: %d  CPU: %d", n.ID, n.Name, n.Description, n.RAM, n.CPU)
+	if n.Owner != "" {
+		mailHint := "  [Personal Computer — no mail messages]"
+		if len(n.Emails) > 0 {
+			mailHint = fmt.Sprintf("  [Personal Computer — %d mail message(s), use 'mail' to read]", len(n.Emails))
+		}
+		return base + "\n" + mailHint
+	}
+	return base
 }

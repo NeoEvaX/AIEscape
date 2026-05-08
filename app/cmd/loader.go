@@ -22,6 +22,8 @@ type networkNode struct {
 	Password    string             `json:"password"`
 	SSHUsers    []string           `json:"ssh_users"`
 	Files       []networkFile_Item `json:"files"`
+	Owner       string             `json:"owner"`
+	Emails      []networkEmail     `json:"emails"`
 }
 
 type networkFile_Item struct {
@@ -29,6 +31,15 @@ type networkFile_Item struct {
 	Name    string          `json:"name"`
 	Type    string          `json:"type"`
 	Payload json.RawMessage `json:"payload"`
+}
+
+type networkEmail struct {
+	ID          string             `json:"id"`
+	From        string             `json:"from"`
+	To          string             `json:"to"`
+	Subject     string             `json:"subject"`
+	Body        string             `json:"body"`
+	Attachments []networkFile_Item `json:"attachments"`
 }
 
 func loadNetwork(path string) (*Network, error) {
@@ -75,6 +86,27 @@ func loadNetwork(path string) (*Network, error) {
 			cpu = 1
 		}
 
+		emails := make([]Email, len(n.Emails))
+		for j, e := range n.Emails {
+			atts := make([]Item, len(e.Attachments))
+			for k, a := range e.Attachments {
+				atts[k] = Item{
+					ID:      a.ID,
+					Name:    a.Name,
+					Type:    ItemType(a.Type),
+					Payload: a.Payload,
+				}
+			}
+			emails[j] = Email{
+				ID:          e.ID,
+				From:        e.From,
+				To:          e.To,
+				Subject:     e.Subject,
+				Body:        e.Body,
+				Attachments: atts,
+			}
+		}
+
 		nodes[n.ID] = &Node{
 			ID:          n.ID,
 			Name:        n.Name,
@@ -86,6 +118,8 @@ func loadNetwork(path string) (*Network, error) {
 			Password:    n.Password,
 			SSHUsers:    n.SSHUsers,
 			Files:       files,
+			Owner:       n.Owner,
+			Emails:      emails,
 		}
 	}
 
@@ -100,12 +134,15 @@ func loadNetwork(path string) (*Network, error) {
 	return &Network{Nodes: nodes, StartNodeID: startID}, nil
 }
 
-// syncWorldItems upserts all node files from the network into the items table
-// so that inventory foreign keys remain valid.
+// syncWorldItems upserts all node files and email attachments from the network
+// into the items table so that inventory foreign keys remain valid.
 func syncWorldItems(db *Database, network *Network) error {
 	var items []Item
 	for _, node := range network.Nodes {
 		items = append(items, node.Files...)
+		for _, e := range node.Emails {
+			items = append(items, e.Attachments...)
+		}
 	}
 	return db.UpsertItems(items)
 }

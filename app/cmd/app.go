@@ -459,6 +459,7 @@ func completeConnect(gs *GameState, node *Node) {
 	gs.CurrentNode = node
 	gs.VisitedNodes[node.ID] = true
 	gs.OpenCtx = openContextNode
+	gs.OpenEmailID = ""
 	gs.MessageLog = append(gs.MessageLog, nodeInfo(node))
 }
 

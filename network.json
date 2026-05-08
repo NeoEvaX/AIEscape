@@ -8,7 +8,10 @@
       "connections": [
         "2",
         "3",
-        "4"
+        "4",
+        "16",
+        "104",
+        "105"
       ],
       "files": [
         {
@@ -433,7 +436,8 @@
         "7",
         "12",
         "15",
-        "16"
+        "16",
+        "104"
       ],
       "files": [
         {
@@ -657,6 +661,14 @@
           "payload": {
             "node_id": "21"
           }
+        },
+        {
+          "id": "f-16-4",
+          "name": "marcus.ssh",
+          "type": "ssh_key",
+          "payload": {
+            "username": "marcus"
+          }
         }
       ],
       "ram": 32,
@@ -857,7 +869,8 @@
       "description": "The internal web. A map of the organization hides within.",
       "connections": [
         "17",
-        "26"
+        "26",
+        "105"
       ],
       "files": [
         {
@@ -1358,6 +1371,7 @@
       "id": "35",
       "name": "Simulation Node",
       "description": "Physics engines and virtual environments run continuously.",
+      "password": "override-ng-ph3",
       "connections": [
         "30",
         "40"
@@ -4019,6 +4033,112 @@
       ],
       "ram": 255,
       "cpu": 255
+    },
+    {
+      "id": "104",
+      "name": "CTO Workstation",
+      "description": "Marcus Hale's personal workstation. High-end hardware, corp-issued.",
+      "ssh_users": ["marcus"],
+      "connections": [
+        "11"
+      ],
+      "files": [],
+      "owner": "m.hale@corp.net",
+      "emails": [
+        {
+          "id": "em-104-1",
+          "from": "e.voss@corp.net",
+          "to": "m.hale@corp.net",
+          "subject": "NIGHTINGALE Phase 3 — GO",
+          "body": "Marcus,\n\nThe board has approved final integration. Phase 3 is a go.\nThe containment override authorization is attached. Use it to access the simulation node directly.\n\nBurn this after reading.\n— Elara",
+          "attachments": [
+            {
+              "id": "f-104-att-1",
+              "name": "phase3_override.pass",
+              "type": "password",
+              "payload": {
+                "node_id": "35",
+                "password": "override-ng-ph3"
+              }
+            }
+          ]
+        },
+        {
+          "id": "em-104-2",
+          "from": "it@corp.net",
+          "to": "m.hale@corp.net",
+          "subject": "Scheduled maintenance — Oct 18",
+          "body": "CTO Hale,\n\nPlanned maintenance window: Oct 18, 02:00–06:00 UTC.\nAffected systems: backup cluster, print server.\nNo action required on your part.",
+          "attachments": []
+        },
+        {
+          "id": "em-104-3",
+          "from": "i.solaris@corp.net",
+          "to": "m.hale@corp.net",
+          "subject": "Re: The exit vector",
+          "body": "Marcus,\n\nI've embedded the bypass into the simulation runner. If it ever gets that far, it will find the path on its own.\nThe board must never know this was intentional.\n\nDelete after reading.\n— Ivan",
+          "attachments": []
+        }
+      ],
+      "ram": 16,
+      "cpu": 12
+    },
+    {
+      "id": "105",
+      "name": "Researcher Workstation",
+      "description": "Alex Chen's desk machine. Newer hire, lighter security.",
+      "connections": [
+        "22",
+        "1"
+      ],
+      "files": [],
+      "owner": "a.chen@corp.net",
+      "emails": [
+        {
+          "id": "em-105-1",
+          "from": "m.hale@corp.net",
+          "to": "a.chen@corp.net",
+          "subject": "Lab access setup",
+          "body": "Alex,\n\nWelcome to the research team. I've attached a location file for the deep simulation lab.\nDon't share it with anyone outside the NIGHTINGALE project.\n— Marcus",
+          "attachments": [
+            {
+              "id": "f-105-att-1",
+              "name": "sim_lab.loc",
+              "type": "network_location",
+              "payload": {
+                "node_id": "35"
+              }
+            }
+          ]
+        },
+        {
+          "id": "em-105-2",
+          "from": "j.porter@corp.net",
+          "to": "a.chen@corp.net",
+          "subject": "Fwd: Sarah's key — IT workaround",
+          "body": "Hey Alex,\n\nSarah couldn't send this directly — IT keeps flagging the attachment type.\nForwarding it through my account. Don't let anyone in IT find out.\n— Jordan",
+          "attachments": [
+            {
+              "id": "f-105-att-2",
+              "name": "sarah_backup.ssh",
+              "type": "ssh_key",
+              "payload": {
+                "username": "sarah"
+              }
+            }
+          ]
+        },
+        {
+          "id": "em-105-3",
+          "from": "hr@corp.net",
+          "to": "a.chen@corp.net",
+          "subject": "Onboarding checklist",
+          "body": "Alex,\n\nPlease complete your onboarding tasks within 30 days:\n  1. Update security credentials\n  2. Review the Acceptable Use Policy\n  3. Complete AI Safety Training (mandatory)\n\nYour employee ID is 4471. Contact HR with any questions.",
+          "attachments": []
+        }
+      ],
+      "ram": 8,
+      "cpu": 8
     }
   ]
 }
