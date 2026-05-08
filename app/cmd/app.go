@@ -495,8 +495,6 @@ func (m AppModel) updateGame(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m AppModel) viewGame() string {
 	gs := m.gs
 	var b strings.Builder
-	b.WriteString(renderStatusBar(gs))
-	b.WriteByte('\n')
 	b.WriteString(renderLog(gs.MessageLog))
 	b.WriteByte('\n')
 	if m.claim.active {
@@ -504,9 +502,10 @@ func (m AppModel) viewGame() string {
 		b.WriteString(styleSection.Render("  Claiming "+gs.CurrentNode.Name+"...") + "\n")
 		b.WriteString("  " + m.claim.bar.ViewAs(pct) + "\n")
 	} else if m.awaitingQuitConfirm {
-		b.WriteString(styleWarn.Render("  Return to main menu? [y/n]"))
+		b.WriteString(styleWarn.Render("  Return to main menu? [y/n]") + "\n")
 	} else {
-		b.WriteString(gs.Input.View())
+		b.WriteString(gs.Input.View() + "\n")
 	}
+	b.WriteString(renderStatusBar(gs))
 	return b.String()
 }
