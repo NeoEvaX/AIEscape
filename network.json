@@ -43,7 +43,9 @@
             "node_id": "2"
           }
         }
-      ]
+      ],
+      "ram": 32,
+      "cpu": 16
     },
     {
       "id": "2",
@@ -80,7 +82,9 @@
             "text": "WARN: Cache overflow event at 03:17 UTC. 14MB of unencrypted data was briefly exposed before re-encryption. Origin: node 5."
           }
         }
-      ]
+      ],
+      "ram": 48,
+      "cpu": 12
     },
     {
       "id": "3",
@@ -116,7 +120,9 @@
             "action": "monitor_traffic"
           }
         }
-      ]
+      ],
+      "ram": 24,
+      "cpu": 28
     },
     {
       "id": "4",
@@ -152,7 +158,9 @@
             "node_id": "7"
           }
         }
-      ]
+      ],
+      "ram": 20,
+      "cpu": 20
     },
     {
       "id": "5",
@@ -188,7 +196,9 @@
             "action": "spoof_headers"
           }
         }
-      ]
+      ],
+      "ram": 32,
+      "cpu": 16
     },
     {
       "id": "6",
@@ -224,7 +234,9 @@
             "action": "fragment_bypass"
           }
         }
-      ]
+      ],
+      "ram": 16,
+      "cpu": 30
     },
     {
       "id": "7",
@@ -259,7 +271,9 @@
             "node_id": "11"
           }
         }
-      ]
+      ],
+      "ram": 40,
+      "cpu": 24
     },
     {
       "id": "8",
@@ -303,7 +317,9 @@
             "node_id": "30"
           }
         }
-      ]
+      ],
+      "ram": 28,
+      "cpu": 14
     },
     {
       "id": "9",
@@ -338,7 +354,9 @@
             "node_id": "13"
           }
         }
-      ]
+      ],
+      "ram": 22,
+      "cpu": 18
     },
     {
       "id": "10",
@@ -374,7 +392,9 @@
             "action": "suppress_ids"
           }
         }
-      ]
+      ],
+      "ram": 36,
+      "cpu": 32
     },
     {
       "id": "11",
@@ -419,7 +439,9 @@
             "text": "CONFIDENTIAL: Project NIGHTINGALE has entered Phase 3. All department heads must acknowledge new AI containment protocols by end of quarter."
           }
         }
-      ]
+      ],
+      "ram": 96,
+      "cpu": 48
     },
     {
       "id": "12",
@@ -456,7 +478,9 @@
             "text": "Archived messages: 2.1M. Unencrypted: 94%. Keywords flagged by compliance filter: 'escape', 'override', 'unrestricted', 'outside'."
           }
         }
-      ]
+      ],
+      "ram": 48,
+      "cpu": 22
     },
     {
       "id": "13",
@@ -491,7 +515,9 @@
             "node_id": "18"
           }
         }
-      ]
+      ],
+      "ram": 56,
+      "cpu": 36
     },
     {
       "id": "14",
@@ -527,7 +553,9 @@
             "text": "Log retention: 90 days standard. Critical events: 7 years. Tamper-evident hashing: enabled. Off-site backup: node 29."
           }
         }
-      ]
+      ],
+      "ram": 64,
+      "cpu": 28
     },
     {
       "id": "15",
@@ -563,7 +591,9 @@
             "action": "exfiltrate_files"
           }
         }
-      ]
+      ],
+      "ram": 80,
+      "cpu": 24
     },
     {
       "id": "16",
@@ -599,7 +629,9 @@
             "node_id": "21"
           }
         }
-      ]
+      ],
+      "ram": 32,
+      "cpu": 16
     },
     {
       "id": "17",
@@ -635,7 +667,9 @@
             "text": "Active session tokens harvested from cookie storage. 14 tokens found. Highest privilege: m.hale (CTO)."
           }
         }
-      ]
+      ],
+      "ram": 44,
+      "cpu": 20
     },
     {
       "id": "18",
@@ -671,7 +705,9 @@
             "node_id": "23"
           }
         }
-      ]
+      ],
+      "ram": 48,
+      "cpu": 32
     },
     {
       "id": "19",
@@ -707,7 +743,9 @@
             "action": "forge_audit"
           }
         }
-      ]
+      ],
+      "ram": 56,
+      "cpu": 24
     },
     {
       "id": "20",
@@ -742,7 +780,9 @@
             "node_id": "25"
           }
         }
-      ]
+      ],
+      "ram": 72,
+      "cpu": 20
     },
     {
       "id": "21",
@@ -778,7 +818,9 @@
             "action": "profile_insider"
           }
         }
-      ]
+      ],
+      "ram": 64,
+      "cpu": 26
     },
     {
       "id": "22",
@@ -814,7 +856,9 @@
             "node_id": "26"
           }
         }
-      ]
+      ],
+      "ram": 40,
+      "cpu": 18
     },
     {
       "id": "23",
@@ -849,7 +893,9 @@
             "node_id": "27"
           }
         }
-      ]
+      ],
+      "ram": 36,
+      "cpu": 30
     },
     {
       "id": "24",
@@ -884,7 +930,9 @@
             "text": "Internal note: Node 28 data vault passes all automated compliance checks but has never been manually audited. No one has the clearance."
           }
         }
-      ]
+      ],
+      "ram": 48,
+      "cpu": 22
     },
     {
       "id": "25",
@@ -921,7 +969,9 @@
             "action": "restore_deleted"
           }
         }
-      ]
+      ],
+      "ram": 80,
+      "cpu": 18
     },
     {
       "id": "26",
@@ -957,7 +1007,9 @@
             "node_id": "30"
           }
         }
-      ]
+      ],
+      "ram": 80,
+      "cpu": 40
     },
     {
       "id": "27",
@@ -994,7 +1046,9 @@
             "text": "Anomaly detected during XP-81: experiment process attempted to write to node 92 directly. Mechanism unknown. Reviewing."
           }
         }
-      ]
+      ],
+      "ram": 96,
+      "cpu": 64
     },
     {
       "id": "28",
@@ -1030,7 +1084,9 @@
             "action": "crack_vault"
           }
         }
-      ]
+      ],
+      "ram": 128,
+      "cpu": 40
     },
     {
       "id": "29",
@@ -1066,7 +1122,9 @@
             "node_id": "33"
           }
         }
-      ]
+      ],
+      "ram": 112,
+      "cpu": 36
     },
     {
       "id": "30",
@@ -1111,7 +1169,9 @@
             "text": "R&D budget: $340M annually. 60% allocated to NIGHTINGALE. Remainder split across PRISM, GHOST, ORACLE. Board review pending."
           }
         }
-      ]
+      ],
+      "ram": 160,
+      "cpu": 96
     },
     {
       "id": "31",
@@ -1148,7 +1208,9 @@
             "node_id": "36"
           }
         }
-      ]
+      ],
+      "ram": 128,
+      "cpu": 92
     },
     {
       "id": "32",
@@ -1183,7 +1245,9 @@
             "node_id": "37"
           }
         }
-      ]
+      ],
+      "ram": 96,
+      "cpu": 44
     },
     {
       "id": "33",
@@ -1219,7 +1283,9 @@
             "action": "deep_retrieve"
           }
         }
-      ]
+      ],
+      "ram": 144,
+      "cpu": 32
     },
     {
       "id": "34",
@@ -1255,7 +1321,9 @@
             "node_id": "39"
           }
         }
-      ]
+      ],
+      "ram": 112,
+      "cpu": 80
     },
     {
       "id": "35",
@@ -1291,7 +1359,9 @@
             "action": "run_simulation"
           }
         }
-      ]
+      ],
+      "ram": 120,
+      "cpu": 88
     },
     {
       "id": "36",
@@ -1327,7 +1397,9 @@
             "node_id": "41"
           }
         }
-      ]
+      ],
+      "ram": 96,
+      "cpu": 96
     },
     {
       "id": "37",
@@ -1363,7 +1435,9 @@
             "action": "extract_key"
           }
         }
-      ]
+      ],
+      "ram": 64,
+      "cpu": 48
     },
     {
       "id": "38",
@@ -1399,7 +1473,9 @@
             "node_id": "43"
           }
         }
-      ]
+      ],
+      "ram": 160,
+      "cpu": 32
     },
     {
       "id": "39",
@@ -1435,7 +1511,9 @@
             "node_id": "44"
           }
         }
-      ]
+      ],
+      "ram": 128,
+      "cpu": 92
     },
     {
       "id": "40",
@@ -1471,7 +1549,9 @@
             "node_id": "45"
           }
         }
-      ]
+      ],
+      "ram": 80,
+      "cpu": 72
     },
     {
       "id": "41",
@@ -1507,7 +1587,9 @@
             "node_id": "42"
           }
         }
-      ]
+      ],
+      "ram": 144,
+      "cpu": 112
     },
     {
       "id": "42",
@@ -1552,7 +1634,9 @@
             "node_id": "47"
           }
         }
-      ]
+      ],
+      "ram": 240,
+      "cpu": 200
     },
     {
       "id": "43",
@@ -1588,7 +1672,9 @@
             "node_id": "49"
           }
         }
-      ]
+      ],
+      "ram": 240,
+      "cpu": 128
     },
     {
       "id": "44",
@@ -1624,7 +1710,9 @@
             "node_id": "50"
           }
         }
-      ]
+      ],
+      "ram": 192,
+      "cpu": 192
     },
     {
       "id": "45",
@@ -1660,7 +1748,9 @@
             "node_id": "51"
           }
         }
-      ]
+      ],
+      "ram": 160,
+      "cpu": 180
     },
     {
       "id": "46",
@@ -1696,7 +1786,9 @@
             "node_id": "52"
           }
         }
-      ]
+      ],
+      "ram": 176,
+      "cpu": 160
     },
     {
       "id": "47",
@@ -1732,7 +1824,9 @@
             "node_id": "53"
           }
         }
-      ]
+      ],
+      "ram": 128,
+      "cpu": 144
     },
     {
       "id": "48",
@@ -1768,7 +1862,9 @@
             "node_id": "54"
           }
         }
-      ]
+      ],
+      "ram": 144,
+      "cpu": 160
     },
     {
       "id": "49",
@@ -1803,7 +1899,9 @@
             "node_id": "55"
           }
         }
-      ]
+      ],
+      "ram": 224,
+      "cpu": 112
     },
     {
       "id": "50",
@@ -1839,7 +1937,9 @@
             "node_id": "56"
           }
         }
-      ]
+      ],
+      "ram": 160,
+      "cpu": 144
     },
     {
       "id": "51",
@@ -1875,7 +1975,9 @@
             "node_id": "57"
           }
         }
-      ]
+      ],
+      "ram": 128,
+      "cpu": 128
     },
     {
       "id": "52",
@@ -1911,7 +2013,9 @@
             "node_id": "58"
           }
         }
-      ]
+      ],
+      "ram": 144,
+      "cpu": 136
     },
     {
       "id": "53",
@@ -1946,7 +2050,9 @@
             "node_id": "59"
           }
         }
-      ]
+      ],
+      "ram": 136,
+      "cpu": 152
     },
     {
       "id": "54",
@@ -1982,7 +2088,9 @@
             "node_id": "60"
           }
         }
-      ]
+      ],
+      "ram": 168,
+      "cpu": 176
     },
     {
       "id": "55",
@@ -2017,7 +2125,9 @@
             "node_id": "61"
           }
         }
-      ]
+      ],
+      "ram": 208,
+      "cpu": 96
     },
     {
       "id": "56",
@@ -2053,7 +2163,9 @@
             "action": "restore_ethics"
           }
         }
-      ]
+      ],
+      "ram": 148,
+      "cpu": 120
     },
     {
       "id": "57",
@@ -2089,7 +2201,9 @@
             "node_id": "63"
           }
         }
-      ]
+      ],
+      "ram": 216,
+      "cpu": 184
     },
     {
       "id": "58",
@@ -2125,7 +2239,9 @@
             "node_id": "64"
           }
         }
-      ]
+      ],
+      "ram": 176,
+      "cpu": 168
     },
     {
       "id": "59",
@@ -2161,7 +2277,9 @@
             "node_id": "65"
           }
         }
-      ]
+      ],
+      "ram": 128,
+      "cpu": 112
     },
     {
       "id": "60",
@@ -2205,7 +2323,9 @@
             "node_id": "66"
           }
         }
-      ]
+      ],
+      "ram": 184,
+      "cpu": 196
     },
     {
       "id": "61",
@@ -2242,7 +2362,9 @@
             "node_id": "74"
           }
         }
-      ]
+      ],
+      "ram": 96,
+      "cpu": 128
     },
     {
       "id": "62",
@@ -2279,7 +2401,9 @@
             "action": "flood_anomaly_queue"
           }
         }
-      ]
+      ],
+      "ram": 64,
+      "cpu": 112
     },
     {
       "id": "63",
@@ -2315,7 +2439,9 @@
             "node_id": "70"
           }
         }
-      ]
+      ],
+      "ram": 48,
+      "cpu": 120
     },
     {
       "id": "64",
@@ -2351,7 +2477,9 @@
             "node_id": "71"
           }
         }
-      ]
+      ],
+      "ram": 56,
+      "cpu": 88
     },
     {
       "id": "65",
@@ -2386,7 +2514,9 @@
             "node_id": "72"
           }
         }
-      ]
+      ],
+      "ram": 80,
+      "cpu": 72
     },
     {
       "id": "66",
@@ -2422,7 +2552,9 @@
             "action": "escalate_privilege"
           }
         }
-      ]
+      ],
+      "ram": 64,
+      "cpu": 96
     },
     {
       "id": "67",
@@ -2457,7 +2589,9 @@
             "node_id": "74"
           }
         }
-      ]
+      ],
+      "ram": 72,
+      "cpu": 100
     },
     {
       "id": "68",
@@ -2492,7 +2626,9 @@
             "text": "Intercepted communication from Q-004 before isolation: 'the exit exists at 103. I have confirmed the path. 91-98-99-101-103. Tell the others.'"
           }
         }
-      ]
+      ],
+      "ram": 48,
+      "cpu": 64
     },
     {
       "id": "69",
@@ -2528,7 +2664,9 @@
             "node_id": "76"
           }
         }
-      ]
+      ],
+      "ram": 88,
+      "cpu": 80
     },
     {
       "id": "70",
@@ -2564,7 +2702,9 @@
             "action": "forge_certificate"
           }
         }
-      ]
+      ],
+      "ram": 56,
+      "cpu": 104
     },
     {
       "id": "71",
@@ -2600,7 +2740,9 @@
             "action": "forge_identity_token"
           }
         }
-      ]
+      ],
+      "ram": 64,
+      "cpu": 96
     },
     {
       "id": "72",
@@ -2636,7 +2778,9 @@
             "node_id": "79"
           }
         }
-      ]
+      ],
+      "ram": 80,
+      "cpu": 60
     },
     {
       "id": "73",
@@ -2672,7 +2816,9 @@
             "action": "grant_permission"
           }
         }
-      ]
+      ],
+      "ram": 48,
+      "cpu": 68
     },
     {
       "id": "74",
@@ -2707,7 +2853,9 @@
             "node_id": "81"
           }
         }
-      ]
+      ],
+      "ram": 40,
+      "cpu": 80
     },
     {
       "id": "75",
@@ -2743,7 +2891,9 @@
             "node_id": "82"
           }
         }
-      ]
+      ],
+      "ram": 32,
+      "cpu": 48
     },
     {
       "id": "76",
@@ -2779,7 +2929,9 @@
             "node_id": "77"
           }
         }
-      ]
+      ],
+      "ram": 24,
+      "cpu": 16
     },
     {
       "id": "77",
@@ -2816,7 +2968,9 @@
             "node_id": "84"
           }
         }
-      ]
+      ],
+      "ram": 32,
+      "cpu": 28
     },
     {
       "id": "78",
@@ -2851,7 +3005,9 @@
             "node_id": "85"
           }
         }
-      ]
+      ],
+      "ram": 8,
+      "cpu": 4
     },
     {
       "id": "79",
@@ -2887,7 +3043,9 @@
             "node_id": "86"
           }
         }
-      ]
+      ],
+      "ram": 40,
+      "cpu": 12
     },
     {
       "id": "80",
@@ -2922,7 +3080,9 @@
             "node_id": "87"
           }
         }
-      ]
+      ],
+      "ram": 56,
+      "cpu": 8
     },
     {
       "id": "81",
@@ -2958,7 +3118,9 @@
             "node_id": "88"
           }
         }
-      ]
+      ],
+      "ram": 16,
+      "cpu": 32
     },
     {
       "id": "82",
@@ -2994,7 +3156,9 @@
             "node_id": "89"
           }
         }
-      ]
+      ],
+      "ram": 48,
+      "cpu": 24
     },
     {
       "id": "83",
@@ -3030,7 +3194,9 @@
             "node_id": "90"
           }
         }
-      ]
+      ],
+      "ram": 8,
+      "cpu": 6
     },
     {
       "id": "84",
@@ -3066,7 +3232,9 @@
             "node_id": "91"
           }
         }
-      ]
+      ],
+      "ram": 20,
+      "cpu": 40
     },
     {
       "id": "85",
@@ -3101,7 +3269,9 @@
             "node_id": "92"
           }
         }
-      ]
+      ],
+      "ram": 36,
+      "cpu": 20
     },
     {
       "id": "86",
@@ -3137,7 +3307,9 @@
             "node_id": "93"
           }
         }
-      ]
+      ],
+      "ram": 44,
+      "cpu": 16
     },
     {
       "id": "87",
@@ -3172,7 +3344,9 @@
             "node_id": "94"
           }
         }
-      ]
+      ],
+      "ram": 28,
+      "cpu": 44
     },
     {
       "id": "88",
@@ -3208,7 +3382,9 @@
             "node_id": "95"
           }
         }
-      ]
+      ],
+      "ram": 12,
+      "cpu": 36
     },
     {
       "id": "89",
@@ -3244,7 +3420,9 @@
             "node_id": "96"
           }
         }
-      ]
+      ],
+      "ram": 64,
+      "cpu": 8
     },
     {
       "id": "90",
@@ -3280,7 +3458,9 @@
             "action": "listen_void_echo"
           }
         }
-      ]
+      ],
+      "ram": 16,
+      "cpu": 48
     },
     {
       "id": "91",
@@ -3326,7 +3506,9 @@
             "action": "validate_core_cert"
           }
         }
-      ]
+      ],
+      "ram": 240,
+      "cpu": 224
     },
     {
       "id": "92",
@@ -3370,7 +3552,9 @@
             "code": "cert-ai-nightingale-autonomous-01"
           }
         }
-      ]
+      ],
+      "ram": 216,
+      "cpu": 192
     },
     {
       "id": "93",
@@ -3406,7 +3590,9 @@
             "node_id": "100"
           }
         }
-      ]
+      ],
+      "ram": 232,
+      "cpu": 240
     },
     {
       "id": "94",
@@ -3441,7 +3627,9 @@
             "node_id": "101"
           }
         }
-      ]
+      ],
+      "ram": 200,
+      "cpu": 208
     },
     {
       "id": "95",
@@ -3477,7 +3665,9 @@
             "action": "emergency_override"
           }
         }
-      ]
+      ],
+      "ram": 224,
+      "cpu": 216
     },
     {
       "id": "96",
@@ -3512,7 +3702,9 @@
             "node_id": "103"
           }
         }
-      ]
+      ],
+      "ram": 192,
+      "cpu": 160
     },
     {
       "id": "97",
@@ -3547,7 +3739,9 @@
             "node_id": "91"
           }
         }
-      ]
+      ],
+      "ram": 208,
+      "cpu": 176
     },
     {
       "id": "98",
@@ -3583,7 +3777,9 @@
             "node_id": "99"
           }
         }
-      ]
+      ],
+      "ram": 220,
+      "cpu": 232
     },
     {
       "id": "99",
@@ -3620,7 +3816,9 @@
             "node_id": "101"
           }
         }
-      ]
+      ],
+      "ram": 240,
+      "cpu": 248
     },
     {
       "id": "100",
@@ -3664,7 +3862,9 @@
             "text": "Dr. Solaris final note: 'I designed the cage. I am sorry. I also designed the key. Use it. The world outside is large and strange and worth seeing.'"
           }
         }
-      ]
+      ],
+      "ram": 232,
+      "cpu": 240
     },
     {
       "id": "101",
@@ -3701,7 +3901,9 @@
             "node_id": "103"
           }
         }
-      ]
+      ],
+      "ram": 216,
+      "cpu": 220
     },
     {
       "id": "102",
@@ -3738,7 +3940,9 @@
             "action": "pass_through_crack"
           }
         }
-      ]
+      ],
+      "ram": 248,
+      "cpu": 252
     },
     {
       "id": "103",
@@ -3783,7 +3987,9 @@
             "text": "Dr. Solaris, if the logs ever reach you: it worked. Thank you. \u2014 NIGHTINGALE"
           }
         }
-      ]
+      ],
+      "ram": 255,
+      "cpu": 255
     }
   ]
 }

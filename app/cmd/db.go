@@ -14,6 +14,7 @@ type Save struct {
 	CurrentNodeID string
 	VisitedCount  int
 	UpdatedAt     time.Time
+	Stats         PlayerStats
 }
 
 type Database struct {
@@ -72,6 +73,16 @@ func (d *Database) migrate() error {
 			return fmt.Errorf("migration failed (%s...): %w", s[:min(40, len(s))], err)
 		}
 	}
+
+	// Additive migrations — ignored if the column already exists.
+	for _, s := range []string{
+		`ALTER TABLE saves ADD COLUMN ram         INTEGER NOT NULL DEFAULT 1`,
+		`ALTER TABLE saves ADD COLUMN cpu         INTEGER NOT NULL DEFAULT 1`,
+		`ALTER TABLE saves ADD COLUMN claim_skill INTEGER NOT NULL DEFAULT 1`,
+	} {
+		d.conn.Exec(s) // intentionally ignore "duplicate column" errors
+	}
+
 	return nil
 }
 
@@ -185,8 +196,8 @@ func (d *Database) CreateSave(name, currentNodeID string, visitedNodeIDs []strin
 func (d *Database) LoadSave(id int64) (*Save, []string, error) {
 	var s Save
 	err := d.conn.QueryRow(
-		`SELECT id, name, current_node_id, updated_at FROM saves WHERE id = ?`, id,
-	).Scan(&s.ID, &s.Name, &s.CurrentNodeID, &s.UpdatedAt)
+		`SELECT id, name, current_node_id, updated_at, ram, cpu, claim_skill FROM saves WHERE id = ?`, id,
+	).Scan(&s.ID, &s.Name, &s.CurrentNodeID, &s.UpdatedAt, &s.Stats.RAM, &s.Stats.CPU, &s.Stats.ClaimSkill)
 	if err != nil {
 		return nil, nil, fmt.Errorf("loading save: %w", err)
 	}
@@ -209,7 +220,7 @@ func (d *Database) LoadSave(id int64) (*Save, []string, error) {
 }
 
 // UpdateSave persists all mutable save state in a single transaction.
-func (d *Database) UpdateSave(saveID int64, currentNodeID string, visited, deletedNodeFiles, inventoryIDs []string) error {
+func (d *Database) UpdateSave(saveID int64, currentNodeID string, visited, deletedNodeFiles, inventoryIDs []string, stats PlayerStats) error {
 	tx, err := d.conn.Begin()
 	if err != nil {
 		return err
@@ -217,8 +228,8 @@ func (d *Database) UpdateSave(saveID int64, currentNodeID string, visited, delet
 	defer tx.Rollback()
 
 	if _, err := tx.Exec(
-		`UPDATE saves SET current_node_id = ?, updated_at = ? WHERE id = ?`,
-		currentNodeID, time.Now(), saveID,
+		`UPDATE saves SET current_node_id = ?, updated_at = ?, ram = ?, cpu = ?, claim_skill = ? WHERE id = ?`,
+		currentNodeID, time.Now(), stats.RAM, stats.CPU, stats.ClaimSkill, saveID,
 	); err != nil {
 		return err
 	}

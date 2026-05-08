@@ -16,6 +16,8 @@ type Node struct {
 	Description string
 	Connections []string
 	Files       []Item
+	RAM         int  // 1–255
+	CPU         int  // 1–255
 	Dark        bool // dark nodes are hidden from scan unless player has the location file
 	Discovered  bool
 }
@@ -42,6 +44,12 @@ const (
 	openContextInventory                    // open reads from inventory
 )
 
+type PlayerStats struct {
+	RAM        int
+	CPU        int
+	ClaimSkill int
+}
+
 type GameState struct {
 	SaveID           int64
 	SaveName         string
@@ -50,6 +58,7 @@ type GameState struct {
 	VisitedNodes     map[string]bool
 	DeletedNodeFiles map[string]bool // item IDs deleted from nodes in this save
 	Inventory        []Item
+	Stats            PlayerStats
 	OpenCtx          openContext // determines what 'open' targets
 	Input            textinput.Model
 	Viewport         viewport.Model
@@ -71,12 +80,13 @@ func newGameState(network *Network, saveID int64, saveName string, startNode *No
 		VisitedNodes:     map[string]bool{startNode.ID: true},
 		DeletedNodeFiles: map[string]bool{},
 		Inventory:        []Item{},
+		Stats:            PlayerStats{RAM: 1, CPU: 1, ClaimSkill: 1},
 		Input:            ti,
 		MessageLog:       []string{nodeInfo(startNode)},
 	}
 }
 
-func newGameStateFromSave(network *Network, save *Save, currentNode *Node, visited, deletedNodeFiles []string, inventory []Item) *GameState {
+func newGameStateFromSave(network *Network, save *Save, currentNode *Node, visited, deletedNodeFiles []string, inventory []Item, stats PlayerStats) *GameState {
 	ti := textinput.New()
 	ti.Placeholder = "Type a command..."
 	ti.Focus()
@@ -106,6 +116,7 @@ func newGameStateFromSave(network *Network, save *Save, currentNode *Node, visit
 		VisitedNodes:     visitedMap,
 		DeletedNodeFiles: deletedMap,
 		Inventory:        inventory,
+		Stats:            stats,
 		Input:            ti,
 		MessageLog:       []string{nodeInfo(currentNode)},
 	}
@@ -293,6 +304,7 @@ func (gs *GameState) handleCommand(input string) gameAction {
 			"  open -n <name>        - force open from current node",
 			"  open -i <name>        - force open from inventory",
 			"  rm <name>             - remove a file from your inventory",
+			"  stats                 - show player stats",
 			"  quit, exit            - return to the main menu",
 			"  help, ?               - show this help message",
 		)
@@ -465,6 +477,14 @@ func (gs *GameState) handleCommand(input string) gameAction {
 
 	// ── Meta ──────────────────────────────────────────────────────────────────
 
+	case "stats":
+		gs.MessageLog = append(gs.MessageLog,
+			"Player stats:",
+			fmt.Sprintf("  RAM:         %d", gs.Stats.RAM),
+			fmt.Sprintf("  CPU:         %d", gs.Stats.CPU),
+			fmt.Sprintf("  Claim Skill: %d", gs.Stats.ClaimSkill),
+		)
+
 	case "quit", "exit":
 		return actionQuit
 
@@ -498,5 +518,5 @@ func (gs *GameState) openItem(item *Item) {
 }
 
 func nodeInfo(n *Node) string {
-	return fmt.Sprintf("[Node %s] %s\n%s", n.ID, n.Name, n.Description)
+	return fmt.Sprintf("[Node %s] %s\n%s\nRAM: %d  CPU: %d", n.ID, n.Name, n.Description, n.RAM, n.CPU)
 }

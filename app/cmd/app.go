@@ -235,6 +235,7 @@ func loadSaveCmd(db *Database, id int64) tea.Cmd {
 			return saveLoadedMsg{err: err}
 		}
 		deleted, err := db.GetDeletedNodeFiles(id)
+		// stats are embedded in save via LoadSave
 		return saveLoadedMsg{save: save, visited: visited, inventory: inventory, deletedNodeFiles: deleted, err: err}
 	}
 }
@@ -263,7 +264,7 @@ func (m AppModel) updateLoadSave(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		currentNode := m.network.Nodes[msg.save.CurrentNodeID]
-		m.gs = newGameStateFromSave(m.network, msg.save, currentNode, msg.visited, msg.deletedNodeFiles, msg.inventory)
+		m.gs = newGameStateFromSave(m.network, msg.save, currentNode, msg.visited, msg.deletedNodeFiles, msg.inventory, msg.save.Stats)
 		m.screen = ScreenGame
 		return m, nil
 
@@ -330,8 +331,9 @@ func persistSaveCmd(db *Database, gs *GameState) tea.Cmd {
 	visited := gs.visitedList()
 	deleted := gs.deletedFilesList()
 	inventory := gs.inventoryIDs()
+	stats := gs.Stats
 	return func() tea.Msg {
-		return gameSavedMsg{err: db.UpdateSave(saveID, currentNodeID, visited, deleted, inventory)}
+		return gameSavedMsg{err: db.UpdateSave(saveID, currentNodeID, visited, deleted, inventory, stats)}
 	}
 }
 
