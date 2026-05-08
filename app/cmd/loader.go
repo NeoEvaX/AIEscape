@@ -19,6 +19,7 @@ type networkNode struct {
 	RAM         int                `json:"ram"`
 	CPU         int                `json:"cpu"`
 	Dark        bool               `json:"dark"`
+	Password    string             `json:"password"`
 	Files       []networkFile_Item `json:"files"`
 }
 
@@ -81,6 +82,7 @@ func loadNetwork(path string) (*Network, error) {
 			RAM:         ram,
 			CPU:         cpu,
 			Dark:        n.Dark,
+			Password:    n.Password,
 			Files:       files,
 		}
 	}

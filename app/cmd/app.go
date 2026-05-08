@@ -8,6 +8,7 @@ import (
 	"charm.land/bubbles/v2/progress"
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 )
 
 type Screen int
@@ -22,8 +23,28 @@ const (
 var mainMenuItems = []string{"New Game", "Load Game", "Quit"}
 
 type claimState struct {
+	active  bool
+	nodeID  string
+	elapsed time.Duration
+	total   time.Duration
+	bar     progress.Model
+}
+
+type authPhase int
+
+const (
+	authPhaseMenu   authPhase = iota // showing the 3-option menu
+	authPhaseTyping                  // player is typing a password
+	authPhaseBrute                   // brute force in progress
+)
+
+type connectAuthState struct {
 	active   bool
-	nodeID   string
+	node     *Node
+	phase    authPhase
+	menuSel  int // 0=type pw, 1=use saved, 2=brute force
+	hasSaved bool
+	pwInput  textinput.Model
 	elapsed  time.Duration
 	total    time.Duration
 	bar      progress.Model
@@ -50,6 +71,7 @@ type AppModel struct {
 	gs                  *GameState
 	awaitingQuitConfirm bool
 	claim               claimState
+	auth                connectAuthState
 }
 
 func NewAppModel(db *Database, network *Network) AppModel {
@@ -349,13 +371,30 @@ func (m AppModel) viewLoadSave() string {
 
 type gameSavedMsg struct{ err error }
 
-type tickMsg struct{}
+type claimTickMsg struct{}
+type bruteTickMsg struct{}
 
-func tickCmd() tea.Cmd {
+func claimTickCmd() tea.Cmd {
 	return func() tea.Msg {
 		time.Sleep(100 * time.Millisecond)
-		return tickMsg{}
+		return claimTickMsg{}
 	}
+}
+
+func bruteTickCmd() tea.Cmd {
+	return func() tea.Msg {
+		time.Sleep(100 * time.Millisecond)
+		return bruteTickMsg{}
+	}
+}
+
+// completeConnect performs the node connection after auth succeeds.
+func completeConnect(gs *GameState, node *Node) {
+	node.Discovered = true
+	gs.CurrentNode = node
+	gs.VisitedNodes[node.ID] = true
+	gs.OpenCtx = openContextNode
+	gs.MessageLog = append(gs.MessageLog, nodeInfo(node))
 }
 
 func persistSaveCmd(db *Database, gs *GameState) tea.Cmd {
@@ -377,7 +416,7 @@ func (m AppModel) updateGame(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case gameSavedMsg:
 		return m, nil
 
-	case tickMsg:
+	case claimTickMsg:
 		if !m.claim.active {
 			return m, nil
 		}
@@ -396,12 +435,30 @@ func (m AppModel) updateGame(msg tea.Msg) (tea.Model, tea.Cmd) {
 				fmt.Sprintf("Claim complete. +%d RAM  +%d CPU", ramGain, cpuGain))
 			return m, persistSaveCmd(m.db, gs)
 		}
-		return m, tickCmd()
+		return m, claimTickCmd()
+
+	case bruteTickMsg:
+		if !m.auth.active || m.auth.phase != authPhaseBrute {
+			return m, nil
+		}
+		m.auth.elapsed += 100 * time.Millisecond
+		if m.auth.elapsed >= m.auth.total {
+			// Brute force complete — connect.
+			node := m.auth.node
+			m.auth = connectAuthState{}
+			completeConnect(gs, node)
+			return m, persistSaveCmd(m.db, gs)
+		}
+		return m, bruteTickCmd()
 
 	case tea.KeyPressMsg:
-		// Block input while a claim is in progress.
+		// Block input while a claim or brute force is in progress.
 		if m.claim.active {
 			return m, nil
+		}
+		// Route keypresses to auth screen when active.
+		if m.auth.active {
+			return m.updateAuth(msg)
 		}
 
 		// Intercept confirmation prompt before normal input handling.
@@ -464,6 +521,25 @@ func (m AppModel) updateGame(msg tea.Msg) (tea.Model, tea.Cmd) {
 					return m, persistSaveCmd(m.db, gs)
 				case actionQuit:
 					m.awaitingQuitConfirm = true
+				case actionConnectAuth:
+					node := gs.PendingConnectNode
+					gs.PendingConnectNode = nil
+					pwInput := textinput.New()
+					pwInput.Placeholder = "enter password..."
+					pwInput.EchoMode = textinput.EchoPassword
+					s := pwInput.Styles()
+					s.Focused.Prompt = lipgloss.NewStyle().Foreground(lipgloss.Color("#39D353")).Bold(true)
+					pwInput.SetStyles(s)
+					pwInput.Prompt = "▶ "
+					m.auth = connectAuthState{
+						active:   true,
+						node:     node,
+						phase:    authPhaseMenu,
+						menuSel:  0,
+						hasSaved: gs.hasPasswordFor(node.ID),
+						pwInput:  pwInput,
+					}
+					return m, nil
 				case actionClaim:
 					node := gs.CurrentNode
 					playerCPU := gs.Stats.CPU
@@ -481,7 +557,7 @@ func (m AppModel) updateGame(msg tea.Msg) (tea.Model, tea.Cmd) {
 						total:   time.Duration(secs * float64(time.Second)),
 						bar:     progress.New(progress.WithDefaultBlend(), progress.WithWidth(40)),
 					}
-					return m, tickCmd()
+					return m, claimTickCmd()
 				}
 			}
 			return m, nil
@@ -492,12 +568,149 @@ func (m AppModel) updateGame(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
+// authMenuOpts returns the selectable option indices for the current auth state.
+// Options: 0=type password, 1=use saved (if available), 2=brute force.
+// Returns a slice of the option indices that are shown.
+func (m AppModel) authMenuOpts() []int {
+	if m.auth.hasSaved {
+		return []int{0, 1, 2}
+	}
+	return []int{0, 2} // skip "use saved"
+}
+
+// updateAuth handles key input while the auth overlay is active.
+func (m AppModel) updateAuth(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	gs := m.gs
+	switch m.auth.phase {
+
+	case authPhaseMenu:
+		opts := m.authMenuOpts()
+		switch msg.String() {
+		case "esc":
+			m.auth = connectAuthState{}
+			gs.MessageLog = append(gs.MessageLog, "Connection cancelled.")
+		case "up", "k":
+			if m.auth.menuSel > 0 {
+				m.auth.menuSel--
+			}
+		case "down", "j":
+			if m.auth.menuSel < len(opts)-1 {
+				m.auth.menuSel++
+			}
+		case "enter":
+			opt := opts[m.auth.menuSel]
+			switch opt {
+			case 0: // type password
+				m.auth.phase = authPhaseTyping
+				m.auth.pwInput.Focus()
+			case 1: // use saved password
+				node := m.auth.node
+				m.auth = connectAuthState{}
+				gs.MessageLog = append(gs.MessageLog, "Using saved password...")
+				completeConnect(gs, node)
+				return m, persistSaveCmd(m.db, gs)
+			case 2: // brute force
+				return m.startBruteForce()
+			}
+		}
+		return m, nil
+
+	case authPhaseTyping:
+		switch msg.String() {
+		case "esc":
+			m.auth.phase = authPhaseMenu
+			return m, nil
+		case "enter":
+			typed := strings.TrimSpace(m.auth.pwInput.Value())
+			m.auth.pwInput.SetValue("")
+			if typed == m.auth.node.Password {
+				node := m.auth.node
+				m.auth = connectAuthState{}
+				gs.MessageLog = append(gs.MessageLog, "Password accepted.")
+				completeConnect(gs, node)
+				return m, persistSaveCmd(m.db, gs)
+			}
+			gs.MessageLog = append(gs.MessageLog, "Incorrect password.")
+			m.auth.phase = authPhaseMenu
+			return m, nil
+		}
+		var cmd tea.Cmd
+		m.auth.pwInput, cmd = m.auth.pwInput.Update(msg)
+		return m, cmd
+	}
+	return m, nil
+}
+
+func (m AppModel) startBruteForce() (AppModel, tea.Cmd) {
+	gs := m.gs
+	node := m.auth.node
+	secs := bruteEst(gs, node)
+	m.auth.phase = authPhaseBrute
+	m.auth.elapsed = 0
+	m.auth.total = time.Duration(secs * float64(time.Second))
+	m.auth.bar = progress.New(progress.WithDefaultBlend(), progress.WithWidth(40))
+	gs.MessageLog = append(gs.MessageLog, fmt.Sprintf("Brute forcing %s...", node.Name))
+	return m, bruteTickCmd()
+}
+
+func (m AppModel) viewAuth() string {
+	gs := m.gs
+	var b strings.Builder
+	node := m.auth.node
+
+	switch m.auth.phase {
+	case authPhaseMenu:
+		b.WriteString(styleWarn.Render(fmt.Sprintf("  ⚠  %s requires authentication.", node.Name)) + "\n")
+		b.WriteString(styleDivider.Render("  "+strings.Repeat("─", 44)) + "\n")
+
+		labels := map[int]string{
+			0: "Enter password manually",
+			1: "Use saved password",
+			2: fmt.Sprintf("Brute force  (est. %.0fs)", bruteEst(gs, node)),
+		}
+		opts := m.authMenuOpts()
+		for i, opt := range opts {
+			sel := m.auth.menuSel == i
+			var line string
+			if sel {
+				line = styleCmd.Render(fmt.Sprintf("  ▶ %s", labels[opt]))
+			} else {
+				line = styleNormal.Render(fmt.Sprintf("    %s", labels[opt]))
+			}
+			b.WriteString(line + "\n")
+		}
+		b.WriteString("\n" + styleDetail.Render("  ↑↓  navigate  •  Enter  select  •  Esc  cancel"))
+
+	case authPhaseTyping:
+		b.WriteString(styleSection.Render(fmt.Sprintf("  Password for %s:", node.Name)) + "\n")
+		b.WriteString("  " + m.auth.pwInput.View() + "\n")
+		b.WriteString(styleDetail.Render("  Enter  submit  •  Esc  back"))
+
+	case authPhaseBrute:
+		pct := float64(m.auth.elapsed) / float64(m.auth.total)
+		b.WriteString(styleSection.Render(fmt.Sprintf("  Brute forcing %s...", node.Name)) + "\n")
+		b.WriteString("  " + m.auth.bar.ViewAs(pct) + "\n")
+	}
+	return b.String()
+}
+
+func bruteEst(gs *GameState, node *Node) float64 {
+	combined := float64(node.CPU+node.RAM) / float64(gs.Stats.CPU+gs.Stats.RAM)
+	secs := combined * 15.0
+	if secs < 2.0 {
+		secs = 2.0
+	}
+	return secs
+}
+
 func (m AppModel) viewGame() string {
 	gs := m.gs
 	var b strings.Builder
 	b.WriteString(renderLog(gs.MessageLog))
 	b.WriteByte('\n')
-	if m.claim.active {
+	if m.auth.active {
+		b.WriteString(m.viewAuth())
+	} else if m.claim.active {
 		pct := float64(m.claim.elapsed) / float64(m.claim.total)
 		b.WriteString(styleSection.Render("  Claiming "+gs.CurrentNode.Name+"...") + "\n")
 		b.WriteString("  " + m.claim.bar.ViewAs(pct) + "\n")

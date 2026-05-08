@@ -13,6 +13,7 @@ const (
 	ItemTypeCertificate     ItemType = "certificate"
 	ItemTypeNetworkLocation ItemType = "network_location"
 	ItemTypeClaimCode       ItemType = "claim_code"
+	ItemTypePassword        ItemType = "password"
 )
 
 func (t ItemType) Display() string {
@@ -27,6 +28,8 @@ func (t ItemType) Display() string {
 		return "Network Location"
 	case ItemTypeClaimCode:
 		return "Claim Code"
+	case ItemTypePassword:
+		return "Password"
 	default:
 		return string(t)
 	}
@@ -81,6 +84,19 @@ func (item *Item) AsCertificate() (*CertificatePayload, error) {
 		return nil, fmt.Errorf("item %q is not a certificate", item.ID)
 	}
 	var p CertificatePayload
+	return &p, json.Unmarshal(item.Payload, &p)
+}
+
+type PasswordPayload struct {
+	NodeID   string `json:"node_id"`
+	Password string `json:"password"`
+}
+
+func (item *Item) AsPassword() (*PasswordPayload, error) {
+	if item.Type != ItemTypePassword {
+		return nil, fmt.Errorf("item %q is not a password", item.ID)
+	}
+	var p PasswordPayload
 	return &p, json.Unmarshal(item.Payload, &p)
 }
 

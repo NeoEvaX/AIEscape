@@ -100,6 +100,7 @@
         "1",
         "6"
       ],
+      "password": "s3cur1ty",
       "files": [
         {
           "id": "f-3-1",
@@ -201,6 +202,12 @@
             "text": "Rewrites packet headers to obscure true origin. Use with care \u2014 detectable by deep inspection.",
             "action": "spoof_headers"
           }
+        },
+        {
+          "id": "f-5-4",
+          "name": "fw3_creds.pass",
+          "type": "password",
+          "payload": { "node_id": "3", "password": "s3cur1ty" }
         }
       ],
       "ram": 32,

@@ -17,9 +17,10 @@ type Node struct {
 	Description string
 	Connections []string
 	Files       []Item
-	RAM         int  // 1–255
-	CPU         int  // 1–255
-	Dark        bool // dark nodes are hidden from scan unless player has the location file
+	RAM         int    // 1–255
+	CPU         int    // 1–255
+	Dark        bool   // dark nodes are hidden from scan unless player has the location file
+	Password    string // empty = no password required
 	Discovered  bool
 }
 
@@ -70,6 +71,9 @@ type GameState struct {
 	History      []string
 	HistoryIdx   int    // index into History when browsing; -1 = not browsing
 	HistoryDraft string // saved draft input while browsing history
+
+	// Pending auth target (set before returning actionConnectAuth, cleared by app.go)
+	PendingConnectNode *Node
 }
 
 // ── Constructors ──────────────────────────────────────────────────────────────
@@ -226,6 +230,27 @@ func (gs *GameState) inInventory(id string) bool {
 	return false
 }
 
+// hasPasswordFor returns true if inventory contains a password item for nodeID.
+func (gs *GameState) hasPasswordFor(nodeID string) bool {
+	_, ok := gs.getPasswordFor(nodeID)
+	return ok
+}
+
+// getPasswordFor returns the password item for nodeID if present in inventory.
+func (gs *GameState) getPasswordFor(nodeID string) (*Item, bool) {
+	for i := range gs.Inventory {
+		item := &gs.Inventory[i]
+		if item.Type != ItemTypePassword {
+			continue
+		}
+		p, err := item.AsPassword()
+		if err == nil && p.NodeID == nodeID {
+			return item, true
+		}
+	}
+	return nil, false
+}
+
 // hasLocationFile returns true if inventory contains a network_location file
 // pointing to the given node ID.
 func (gs *GameState) hasLocationFile(nodeID string) bool {
@@ -269,7 +294,7 @@ func (gs *GameState) tabComplete(input string) (string, bool) {
 	invNames := func() []string {
 		var names []string
 		for _, item := range gs.Inventory {
-			if item.Type != ItemTypeNetworkLocation {
+			if item.Type != ItemTypeNetworkLocation && item.Type != ItemTypePassword {
 				names = append(names, item.Name)
 			}
 		}
@@ -319,10 +344,11 @@ func (gs *GameState) tabComplete(input string) (string, bool) {
 type gameAction int
 
 const (
-	actionNone    gameAction = iota
-	actionPersist            // any change that should be written to DB
-	actionQuit               // player wants to return to main menu
-	actionClaim              // begin a timed claim on the current node
+	actionNone        gameAction = iota
+	actionPersist                // any change that should be written to DB
+	actionQuit                   // player wants to return to main menu
+	actionClaim                  // begin a timed claim on the current node
+	actionConnectAuth            // target node requires authentication
 )
 
 // handleCommand processes user input and returns the resulting action.
@@ -346,8 +372,9 @@ func (gs *GameState) handleCommand(input string) gameAction {
 			"  ls, list              - list files on the current node",
 			"  assimilate <name>     - copy a file from this node into your inventory",
 			"  delete <name>         - permanently delete a file from this node",
-			"  inventory, inv        - list your assimilated files (excluding locations)",
+			"  inventory, inv        - list your assimilated files",
 			"  locs                  - list your assimilated location files",
+			"  passwords             - list your saved passwords",
 			"  open <name>           - display a file (node or inventory based on context)",
 			"  open -n <name>        - force open from current node",
 			"  open -i <name>        - force open from inventory",
@@ -393,6 +420,10 @@ func (gs *GameState) handleCommand(input string) gameAction {
 				return actionNone
 			}
 			gs.MessageLog = append(gs.MessageLog, fmt.Sprintf("Routing via location file to node %s.", targetID))
+		}
+		if target.Password != "" {
+			gs.PendingConnectNode = target
+			return actionConnectAuth
 		}
 		target.Discovered = true
 		gs.CurrentNode = target
@@ -474,7 +505,7 @@ func (gs *GameState) handleCommand(input string) gameAction {
 		gs.OpenCtx = openContextInventory
 		var items []Item
 		for _, item := range gs.Inventory {
-			if item.Type != ItemTypeNetworkLocation {
+			if item.Type != ItemTypeNetworkLocation && item.Type != ItemTypePassword {
 				items = append(items, item)
 			}
 		}
@@ -487,6 +518,33 @@ func (gs *GameState) handleCommand(input string) gameAction {
 					fmt.Sprintf("  %-26s (%s)", item.Name, item.Type.Display()))
 			}
 			gs.MessageLog = append(gs.MessageLog, "  use 'open <name>' to read  •  'rm <name>' to remove")
+		}
+
+	case "passwords":
+		var pws []Item
+		for _, item := range gs.Inventory {
+			if item.Type == ItemTypePassword {
+				pws = append(pws, item)
+			}
+		}
+		if len(pws) == 0 {
+			gs.MessageLog = append(gs.MessageLog, "No passwords assimilated.")
+		} else {
+			gs.MessageLog = append(gs.MessageLog, fmt.Sprintf("Saved passwords: %d", len(pws)))
+			for _, item := range pws {
+				p, err := item.AsPassword()
+				nodeLabel := "unknown"
+				if err == nil {
+					if n, ok := gs.Network.Nodes[p.NodeID]; ok {
+						nodeLabel = n.ID + ": " + n.Name
+					} else {
+						nodeLabel = p.NodeID
+					}
+				}
+				gs.MessageLog = append(gs.MessageLog,
+					fmt.Sprintf("  %-26s → %s", item.Name, nodeLabel))
+			}
+			gs.MessageLog = append(gs.MessageLog, "  use 'rm <name>' to remove")
 		}
 
 	case "locs":
