@@ -359,7 +359,7 @@ func (gs *GameState) handleCommand(input string) gameAction {
 			gs.MessageLog = append(gs.MessageLog, fmt.Sprintf("File %q not found on this node.", fileID))
 			return actionNone
 		}
-		gs.DeletedNodeFiles[fileID] = true
+		gs.DeletedNodeFiles[f.ID] = true
 		gs.MessageLog = append(gs.MessageLog, fmt.Sprintf("Deleted %s from node.", f.Name))
 		return actionPersist
 
@@ -415,18 +415,22 @@ func (gs *GameState) handleCommand(input string) gameAction {
 
 	case "rm":
 		if len(parts) < 2 {
-			gs.MessageLog = append(gs.MessageLog, "Usage: rm <id>")
+			gs.MessageLog = append(gs.MessageLog, "Usage: rm <name>")
 			return actionNone
 		}
-		fileID := parts[1]
-		for i, item := range gs.Inventory {
-			if item.ID == fileID {
+		item := gs.findInventoryItem(parts[1])
+		if item == nil {
+			gs.MessageLog = append(gs.MessageLog, fmt.Sprintf("File %q not in inventory.", parts[1]))
+			return actionNone
+		}
+		for i := range gs.Inventory {
+			if gs.Inventory[i].ID == item.ID {
+				name := gs.Inventory[i].Name
 				gs.Inventory = append(gs.Inventory[:i], gs.Inventory[i+1:]...)
-				gs.MessageLog = append(gs.MessageLog, fmt.Sprintf("Removed %s from inventory.", item.Name))
+				gs.MessageLog = append(gs.MessageLog, fmt.Sprintf("Removed %s from inventory.", name))
 				return actionPersist
 			}
 		}
-		gs.MessageLog = append(gs.MessageLog, fmt.Sprintf("File %q not in inventory.", fileID))
 
 	// ── Meta ──────────────────────────────────────────────────────────────────
 
