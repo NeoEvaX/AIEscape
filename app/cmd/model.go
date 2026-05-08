@@ -239,10 +239,21 @@ func (gs *GameState) tabComplete(input string) (string, bool) {
 		}
 		return names
 	}
+	deletableNames := func() []string {
+		var names []string
+		for _, f := range gs.nodeFiles() {
+			if f.Type != ItemTypeNetworkLocation {
+				names = append(names, f.Name)
+			}
+		}
+		return names
+	}
 	invNames := func() []string {
-		names := make([]string, len(gs.Inventory))
-		for i, item := range gs.Inventory {
-			names[i] = item.Name
+		var names []string
+		for _, item := range gs.Inventory {
+			if item.Type != ItemTypeNetworkLocation {
+				names = append(names, item.Name)
+			}
 		}
 		return names
 	}
@@ -257,8 +268,9 @@ func (gs *GameState) tabComplete(input string) (string, bool) {
 		{"open -n ", nodeNames},
 		{"open -i ", invNames},
 		{"open ", openSource},
-		{"delete ", nodeNames},
+		{"delete ", deletableNames},
 		{"rm ", invNames},
+		{"assimilate ", nodeNames},
 	}
 
 	for _, r := range rules {
@@ -316,7 +328,8 @@ func (gs *GameState) handleCommand(input string) gameAction {
 			"  ls, list              - list files on the current node",
 			"  assimilate <name>     - copy a file from this node into your inventory",
 			"  delete <name>         - permanently delete a file from this node",
-			"  inventory, inv        - list your assimilated files",
+			"  inventory, inv        - list your assimilated files (excluding locations)",
+			"  locs                  - list your assimilated location files",
 			"  open <name>           - display a file (node or inventory based on context)",
 			"  open -n <name>        - force open from current node",
 			"  open -i <name>        - force open from inventory",
@@ -390,15 +403,17 @@ func (gs *GameState) handleCommand(input string) gameAction {
 			gs.MessageLog = append(gs.MessageLog, "  (* = already assimilated)")
 		}
 
+
+
 	case "assimilate":
 		if len(parts) < 2 {
 			gs.MessageLog = append(gs.MessageLog, "Usage: assimilate <id>")
 			return actionNone
 		}
-		fileID := parts[1]
-		f := gs.findNodeFile(fileID)
+		query := parts[1]
+		f := gs.findNodeFile(query)
 		if f == nil {
-			gs.MessageLog = append(gs.MessageLog, fmt.Sprintf("File %q not found on this node.", fileID))
+			gs.MessageLog = append(gs.MessageLog, fmt.Sprintf("File %q not found on this node.", query))
 			return actionNone
 		}
 		if f.Type == ItemTypeClaimCode {
@@ -427,6 +442,10 @@ func (gs *GameState) handleCommand(input string) gameAction {
 			gs.MessageLog = append(gs.MessageLog, fmt.Sprintf("File %q not found on this node.", fileID))
 			return actionNone
 		}
+		if f.Type == ItemTypeNetworkLocation {
+			gs.MessageLog = append(gs.MessageLog, "Location files cannot be deleted from a node.")
+			return actionNone
+		}
 		gs.DeletedNodeFiles[f.ID] = true
 		gs.MessageLog = append(gs.MessageLog, fmt.Sprintf("Deleted %s from node.", f.Name))
 		return actionPersist
@@ -435,15 +454,39 @@ func (gs *GameState) handleCommand(input string) gameAction {
 
 	case "inventory", "inv":
 		gs.OpenCtx = openContextInventory
-		if len(gs.Inventory) == 0 {
+		var items []Item
+		for _, item := range gs.Inventory {
+			if item.Type != ItemTypeNetworkLocation {
+				items = append(items, item)
+			}
+		}
+		if len(items) == 0 {
 			gs.MessageLog = append(gs.MessageLog, "No files assimilated.")
 		} else {
-			gs.MessageLog = append(gs.MessageLog, fmt.Sprintf("Assimilated files: %d", len(gs.Inventory)))
-			for _, item := range gs.Inventory {
+			gs.MessageLog = append(gs.MessageLog, fmt.Sprintf("Assimilated files: %d", len(items)))
+			for _, item := range items {
 				gs.MessageLog = append(gs.MessageLog,
 					fmt.Sprintf("  %-26s (%s)", item.Name, item.Type.Display()))
 			}
 			gs.MessageLog = append(gs.MessageLog, "  use 'open <name>' to read  •  'rm <name>' to remove")
+		}
+
+	case "locs":
+		var locs []Item
+		for _, item := range gs.Inventory {
+			if item.Type == ItemTypeNetworkLocation {
+				locs = append(locs, item)
+			}
+		}
+		if len(locs) == 0 {
+			gs.MessageLog = append(gs.MessageLog, "No location files assimilated.")
+		} else {
+			gs.MessageLog = append(gs.MessageLog, fmt.Sprintf("Location files: %d", len(locs)))
+			for _, item := range locs {
+				gs.MessageLog = append(gs.MessageLog,
+					fmt.Sprintf("  %-26s", item.Name))
+			}
+			gs.MessageLog = append(gs.MessageLog, "  use 'rm <name>' to remove")
 		}
 
 	case "open":

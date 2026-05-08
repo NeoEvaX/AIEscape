@@ -57,11 +57,10 @@ func loadNetwork(path string) (*Network, error) {
 		}
 		// Auto-generate a self-referencing location file for this node.
 		// Assimilating it lets a player connect here from anywhere.
-		locName := "node_" + n.ID + ".loc"
 		locPayload, _ := json.Marshal(NetworkLocationPayload{NodeID: n.ID})
 		files = append(files, Item{
 			ID:      "f-" + n.ID + "-loc",
-			Name:    locName,
+			Name:    "node_" + n.ID + ".loc",
 			Type:    ItemTypeNetworkLocation,
 			Payload: locPayload,
 		})
