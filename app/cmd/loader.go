@@ -103,12 +103,9 @@ func loadNetwork(path string) (*Network, error) {
 // syncWorldItems upserts all node files from the network into the items table
 // so that inventory foreign keys remain valid.
 func syncWorldItems(db *Database, network *Network) error {
+	var items []Item
 	for _, node := range network.Nodes {
-		for _, item := range node.Files {
-			if err := db.UpsertItem(item); err != nil {
-				return fmt.Errorf("syncing item %q: %w", item.ID, err)
-			}
-		}
+		items = append(items, node.Files...)
 	}
-	return nil
+	return db.UpsertItems(items)
 }

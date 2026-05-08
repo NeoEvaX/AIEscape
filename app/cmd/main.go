@@ -7,23 +7,17 @@ import (
 )
 
 func main() {
-	db, err := OpenDatabase("saves.db")
+	p := tea.NewProgram(NewLoadingModel())
+	finalModel, err := p.Run()
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer db.Close()
-
-	network, err := loadNetwork("network.json")
-	if err != nil {
-		log.Fatal(err)
+	// If an error occurred during loading, the LoadingModel stays on screen
+	// with the error displayed; close any open DB on exit.
+	if lm, ok := finalModel.(LoadingModel); ok && lm.db != nil {
+		lm.db.Close()
 	}
-
-	if err := syncWorldItems(db, network); err != nil {
-		log.Fatal(err)
-	}
-
-	p := tea.NewProgram(NewAppModel(db, network))
-	if _, err := p.Run(); err != nil {
-		log.Fatal(err)
+	if am, ok := finalModel.(AppModel); ok && am.db != nil {
+		am.db.Close()
 	}
 }

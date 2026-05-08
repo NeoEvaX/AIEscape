@@ -102,6 +102,26 @@ func (d *Database) UpsertItem(item Item) error {
 	return err
 }
 
+// UpsertItems upserts a batch of items in a single transaction.
+func (d *Database) UpsertItems(items []Item) error {
+	tx, err := d.conn.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	stmt, err := tx.Prepare(`INSERT OR REPLACE INTO items (id, name, type, payload) VALUES (?, ?, ?, ?)`)
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+	for _, item := range items {
+		if _, err := stmt.Exec(item.ID, item.Name, string(item.Type), string(item.Payload)); err != nil {
+			return fmt.Errorf("upserting item %q: %w", item.ID, err)
+		}
+	}
+	return tx.Commit()
+}
+
 func (d *Database) GetInventory(saveID int64) ([]Item, error) {
 	rows, err := d.conn.Query(`
 		SELECT i.id, i.name, i.type, i.payload
