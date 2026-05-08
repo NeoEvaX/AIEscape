@@ -21,6 +21,9 @@ var (
 	styleMeta       = lipgloss.NewStyle().Foreground(lipgloss.Color("#475569"))
 	styleDivider    = lipgloss.NewStyle().Foreground(lipgloss.Color("#1E3A4A"))
 
+	styleSSHLocked   = lipgloss.NewStyle().Foreground(lipgloss.Color("#39D353")).Bold(true)
+	styleSSHCycling  = lipgloss.NewStyle().Foreground(lipgloss.Color("#1E3A2A"))
+
 	styleStatusLabel = lipgloss.NewStyle().Foreground(lipgloss.Color("#475569"))
 	styleStatusValue = lipgloss.NewStyle().Foreground(lipgloss.Color("#22D3EE")).Bold(true)
 	styleStatusSep   = lipgloss.NewStyle().Foreground(lipgloss.Color("#1E3A4A"))

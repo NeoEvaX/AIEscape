@@ -14,6 +14,7 @@ const (
 	ItemTypeNetworkLocation ItemType = "network_location"
 	ItemTypeClaimCode       ItemType = "claim_code"
 	ItemTypePassword        ItemType = "password"
+	ItemTypeSSHKey          ItemType = "ssh_key"
 )
 
 func (t ItemType) Display() string {
@@ -30,6 +31,8 @@ func (t ItemType) Display() string {
 		return "Claim Code"
 	case ItemTypePassword:
 		return "Password"
+	case ItemTypeSSHKey:
+		return "SSH Key"
 	default:
 		return string(t)
 	}
@@ -90,6 +93,18 @@ func (item *Item) AsCertificate() (*CertificatePayload, error) {
 type PasswordPayload struct {
 	NodeID   string `json:"node_id"`
 	Password string `json:"password"`
+}
+
+type SSHKeyPayload struct {
+	Username string `json:"username"`
+}
+
+func (item *Item) AsSSHKey() (*SSHKeyPayload, error) {
+	if item.Type != ItemTypeSSHKey {
+		return nil, fmt.Errorf("item %q is not an SSH key", item.ID)
+	}
+	var p SSHKeyPayload
+	return &p, json.Unmarshal(item.Payload, &p)
 }
 
 func (item *Item) AsPassword() (*PasswordPayload, error) {

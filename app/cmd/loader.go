@@ -20,6 +20,7 @@ type networkNode struct {
 	CPU         int                `json:"cpu"`
 	Dark        bool               `json:"dark"`
 	Password    string             `json:"password"`
+	SSHUsers    []string           `json:"ssh_users"`
 	Files       []networkFile_Item `json:"files"`
 }
 
@@ -83,6 +84,7 @@ func loadNetwork(path string) (*Network, error) {
 			CPU:         cpu,
 			Dark:        n.Dark,
 			Password:    n.Password,
+			SSHUsers:    n.SSHUsers,
 			Files:       files,
 		}
 	}

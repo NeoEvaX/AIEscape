@@ -20,7 +20,8 @@ type Node struct {
 	RAM         int    // 1–255
 	CPU         int    // 1–255
 	Dark        bool   // dark nodes are hidden from scan unless player has the location file
-	Password    string // empty = no password required
+	Password    string   // empty = no password required
+	SSHUsers    []string // non-empty = SSH auth required; lists allowed usernames
 	Discovered  bool
 }
 
@@ -251,6 +252,42 @@ func (gs *GameState) getPasswordFor(nodeID string) (*Item, bool) {
 	return nil, false
 }
 
+// sshKeysForNode returns inventory SSH key items whose username matches any of
+// the node's allowed users.
+func (gs *GameState) sshKeysForNode(node *Node) []Item {
+	var keys []Item
+	for _, item := range gs.Inventory {
+		if item.Type != ItemTypeSSHKey {
+			continue
+		}
+		p, err := item.AsSSHKey()
+		if err != nil {
+			continue
+		}
+		for _, u := range node.SSHUsers {
+			if strings.EqualFold(p.Username, u) {
+				keys = append(keys, item)
+				break
+			}
+		}
+	}
+	return keys
+}
+
+// hasSSHBreak returns true if the player has an application with action "ssh_break".
+func (gs *GameState) hasSSHBreak() bool {
+	for _, item := range gs.Inventory {
+		if item.Type != ItemTypeApplication {
+			continue
+		}
+		p, err := item.AsApplication()
+		if err == nil && p.Action == "ssh_break" {
+			return true
+		}
+	}
+	return false
+}
+
 // hasLocationFile returns true if inventory contains a network_location file
 // pointing to the given node ID.
 func (gs *GameState) hasLocationFile(nodeID string) bool {
@@ -348,7 +385,8 @@ const (
 	actionPersist                // any change that should be written to DB
 	actionQuit                   // player wants to return to main menu
 	actionClaim                  // begin a timed claim on the current node
-	actionConnectAuth            // target node requires authentication
+	actionConnectAuth            // target node requires password authentication
+	actionConnectSSH             // target node requires SSH authentication
 )
 
 // handleCommand processes user input and returns the resulting action.
@@ -375,6 +413,7 @@ func (gs *GameState) handleCommand(input string) gameAction {
 			"  inventory, inv        - list your assimilated files",
 			"  locs                  - list your assimilated location files",
 			"  passwords             - list your saved passwords",
+			"  keys                  - list your SSH keys",
 			"  open <name>           - display a file (node or inventory based on context)",
 			"  open -n <name>        - force open from current node",
 			"  open -i <name>        - force open from inventory",
@@ -420,6 +459,10 @@ func (gs *GameState) handleCommand(input string) gameAction {
 				return actionNone
 			}
 			gs.MessageLog = append(gs.MessageLog, fmt.Sprintf("Routing via location file to node %s.", targetID))
+		}
+		if len(target.SSHUsers) > 0 {
+			gs.PendingConnectNode = target
+			return actionConnectSSH
 		}
 		if target.Password != "" {
 			gs.PendingConnectNode = target
@@ -505,7 +548,7 @@ func (gs *GameState) handleCommand(input string) gameAction {
 		gs.OpenCtx = openContextInventory
 		var items []Item
 		for _, item := range gs.Inventory {
-			if item.Type != ItemTypeNetworkLocation && item.Type != ItemTypePassword {
+			if item.Type != ItemTypeNetworkLocation && item.Type != ItemTypePassword && item.Type != ItemTypeSSHKey {
 				items = append(items, item)
 			}
 		}
@@ -543,6 +586,29 @@ func (gs *GameState) handleCommand(input string) gameAction {
 				}
 				gs.MessageLog = append(gs.MessageLog,
 					fmt.Sprintf("  %-26s → %s", item.Name, nodeLabel))
+			}
+			gs.MessageLog = append(gs.MessageLog, "  use 'rm <name>' to remove")
+		}
+
+	case "keys":
+		var keys []Item
+		for _, item := range gs.Inventory {
+			if item.Type == ItemTypeSSHKey {
+				keys = append(keys, item)
+			}
+		}
+		if len(keys) == 0 {
+			gs.MessageLog = append(gs.MessageLog, "No SSH keys assimilated.")
+		} else {
+			gs.MessageLog = append(gs.MessageLog, fmt.Sprintf("SSH keys: %d", len(keys)))
+			for _, item := range keys {
+				p, err := item.AsSSHKey()
+				user := "unknown"
+				if err == nil {
+					user = p.Username
+				}
+				gs.MessageLog = append(gs.MessageLog,
+					fmt.Sprintf("  %-26s user: %s", item.Name, user))
 			}
 			gs.MessageLog = append(gs.MessageLog, "  use 'rm <name>' to remove")
 		}

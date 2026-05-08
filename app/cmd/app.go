@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"math/rand"
 	"strings"
 	"time"
 
@@ -29,6 +30,60 @@ type claimState struct {
 	total   time.Duration
 	bar     progress.Model
 }
+
+// ── SSH auth ──────────────────────────────────────────────────────────────────
+
+const (
+	sshGridCols = 8
+	sshGridRows = 3
+	sshGridSize = sshGridCols * sshGridRows // 24 cells
+)
+
+var sshCrackChars = []rune("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%&*+-=/<>[]{}|")
+
+type sshOption struct {
+	kind     int    // 0 = use SSH key, 1 = crack
+	username string // for kind=0
+}
+
+type sshAuthPhase int
+
+const (
+	sshPhaseMenu  sshAuthPhase = iota
+	sshPhaseCrack              // cracking animation running
+)
+
+type sshAuthState struct {
+	active   bool
+	node     *Node
+	phase    sshAuthPhase
+	menuSel  int
+	options  []sshOption
+	// crack animation
+	cells    [sshGridSize]rune
+	locked   int
+	elapsed  time.Duration
+	duration time.Duration
+}
+
+func newSSHCrackCells() [sshGridSize]rune {
+	var cells [sshGridSize]rune
+	for i := range cells {
+		cells[i] = sshCrackChars[rand.Intn(len(sshCrackChars))]
+	}
+	return cells
+}
+
+func sshCrackDuration(gs *GameState, node *Node) time.Duration {
+	combined := float64(node.CPU+node.RAM) / float64(gs.Stats.CPU+gs.Stats.RAM)
+	secs := combined * 20.0
+	if secs < 3.0 {
+		secs = 3.0
+	}
+	return time.Duration(secs * float64(time.Second))
+}
+
+// ── Password auth ─────────────────────────────────────────────────────────────
 
 type authPhase int
 
@@ -72,6 +127,7 @@ type AppModel struct {
 	awaitingQuitConfirm bool
 	claim               claimState
 	auth                connectAuthState
+	ssh                 sshAuthState
 }
 
 func NewAppModel(db *Database, network *Network) AppModel {
@@ -388,6 +444,15 @@ func bruteTickCmd() tea.Cmd {
 	}
 }
 
+type sshTickMsg struct{}
+
+func sshTickCmd() tea.Cmd {
+	return func() tea.Msg {
+		time.Sleep(75 * time.Millisecond)
+		return sshTickMsg{}
+	}
+}
+
 // completeConnect performs the node connection after auth succeeds.
 func completeConnect(gs *GameState, node *Node) {
 	node.Discovered = true
@@ -451,6 +516,31 @@ func (m AppModel) updateGame(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, bruteTickCmd()
 
+	case sshTickMsg:
+		if !m.ssh.active || m.ssh.phase != sshPhaseCrack {
+			return m, nil
+		}
+		m.ssh.elapsed += 75 * time.Millisecond
+		// Advance locked count.
+		newLocked := int(float64(m.ssh.elapsed) / float64(m.ssh.duration) * float64(sshGridSize))
+		if newLocked > sshGridSize {
+			newLocked = sshGridSize
+		}
+		m.ssh.locked = newLocked
+		// Randomize all unlocked cells.
+		for i := m.ssh.locked; i < sshGridSize; i++ {
+			m.ssh.cells[i] = sshCrackChars[rand.Intn(len(sshCrackChars))]
+		}
+		if m.ssh.locked >= sshGridSize {
+			// Crack complete — connect.
+			node := m.ssh.node
+			m.ssh = sshAuthState{}
+			gs.MessageLog = append(gs.MessageLog, "SSH encryption cracked.")
+			completeConnect(gs, node)
+			return m, persistSaveCmd(m.db, gs)
+		}
+		return m, sshTickCmd()
+
 	case tea.KeyPressMsg:
 		// During a claim, only allow Esc to cancel it.
 		if m.claim.active {
@@ -460,7 +550,11 @@ func (m AppModel) updateGame(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 		}
-		// Route keypresses to auth screen when active.
+		// Route keypresses to SSH auth when active.
+		if m.ssh.active {
+			return m.updateSSH(msg)
+		}
+		// Route keypresses to password auth screen when active.
 		if m.auth.active {
 			return m.updateAuth(msg)
 		}
@@ -525,6 +619,24 @@ func (m AppModel) updateGame(msg tea.Msg) (tea.Model, tea.Cmd) {
 					return m, persistSaveCmd(m.db, gs)
 				case actionQuit:
 					m.awaitingQuitConfirm = true
+				case actionConnectSSH:
+					node := gs.PendingConnectNode
+					gs.PendingConnectNode = nil
+					var opts []sshOption
+					for _, key := range gs.sshKeysForNode(node) {
+						p, _ := key.AsSSHKey()
+						opts = append(opts, sshOption{kind: 0, username: p.Username})
+					}
+					if gs.hasSSHBreak() {
+						opts = append(opts, sshOption{kind: 1})
+					}
+					m.ssh = sshAuthState{
+						active:  true,
+						node:    node,
+						phase:   sshPhaseMenu,
+						options: opts,
+					}
+					return m, nil
 				case actionConnectAuth:
 					node := gs.PendingConnectNode
 					gs.PendingConnectNode = nil
@@ -580,6 +692,125 @@ func (m AppModel) authMenuOpts() []int {
 		return []int{0, 1, 2}
 	}
 	return []int{0, 2} // skip "use saved"
+}
+
+// updateSSH handles key input during SSH authentication.
+func (m AppModel) updateSSH(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	gs := m.gs
+	switch m.ssh.phase {
+
+	case sshPhaseMenu:
+		switch msg.String() {
+		case "esc":
+			m.ssh = sshAuthState{}
+			gs.MessageLog = append(gs.MessageLog, "Connection cancelled.")
+		case "up", "k":
+			if m.ssh.menuSel > 0 {
+				m.ssh.menuSel--
+			}
+		case "down", "j":
+			if m.ssh.menuSel < len(m.ssh.options)-1 {
+				m.ssh.menuSel++
+			}
+		case "enter":
+			if len(m.ssh.options) == 0 {
+				m.ssh = sshAuthState{}
+				gs.MessageLog = append(gs.MessageLog, "Connection cancelled.")
+				return m, nil
+			}
+			opt := m.ssh.options[m.ssh.menuSel]
+			switch opt.kind {
+			case 0: // use SSH key
+				node := m.ssh.node
+				m.ssh = sshAuthState{}
+				gs.MessageLog = append(gs.MessageLog, fmt.Sprintf("Authenticated as %s.", opt.username))
+				completeConnect(gs, node)
+				return m, persistSaveCmd(m.db, gs)
+			case 1: // crack
+				m.ssh.phase = sshPhaseCrack
+				m.ssh.cells = newSSHCrackCells()
+				m.ssh.locked = 0
+				m.ssh.elapsed = 0
+				m.ssh.duration = sshCrackDuration(gs, m.ssh.node)
+				gs.MessageLog = append(gs.MessageLog, fmt.Sprintf("Cracking SSH on %s...", m.ssh.node.Name))
+				return m, sshTickCmd()
+			}
+		}
+		return m, nil
+
+	case sshPhaseCrack:
+		if msg.String() == "esc" {
+			m.ssh.phase = sshPhaseMenu
+			m.ssh.locked = 0
+			m.ssh.elapsed = 0
+			gs.MessageLog = append(gs.MessageLog, "SSH crack aborted.")
+		}
+		return m, nil
+	}
+	return m, nil
+}
+
+func (m AppModel) viewSSH() string {
+	gs := m.gs
+	var b strings.Builder
+	node := m.ssh.node
+
+	switch m.ssh.phase {
+	case sshPhaseMenu:
+		b.WriteString(styleFileHeader.Render(fmt.Sprintf("  ⚿  %s requires SSH authentication.", node.Name)) + "\n")
+		b.WriteString(styleDivider.Render("  "+strings.Repeat("─", 44)) + "\n")
+		b.WriteString(styleDetail.Render("  Allowed: "+strings.Join(node.SSHUsers, ", ")) + "\n\n")
+		if len(m.ssh.options) == 0 {
+			b.WriteString(styleWarn.Render("  No valid SSH keys found in inventory.") + "\n")
+			b.WriteString(styleWarn.Render("  ssh_break.app required to crack.") + "\n")
+			b.WriteString("\n" + styleDetail.Render("  Esc  cancel"))
+		} else {
+			for i, opt := range m.ssh.options {
+				sel := m.ssh.menuSel == i
+				var label string
+				if opt.kind == 0 {
+					label = fmt.Sprintf("Connect as %s", opt.username)
+				} else {
+					dur := sshCrackDuration(gs, node)
+					label = fmt.Sprintf("Crack SSH  (est. %.0fs)", dur.Seconds())
+				}
+				if sel {
+					b.WriteString(styleCmd.Render("  ▶ "+label) + "\n")
+				} else {
+					b.WriteString(styleNormal.Render("    "+label) + "\n")
+				}
+			}
+			b.WriteString("\n" + styleDetail.Render("  ↑↓  navigate  •  Enter  select  •  Esc  cancel"))
+		}
+
+	case sshPhaseCrack:
+		b.WriteString(styleFileHeader.Render(fmt.Sprintf("  ⚿  Cracking SSH on %s...", node.Name)) + "\n")
+		b.WriteString(styleDivider.Render("  "+strings.Repeat("─", 44)) + "\n\n")
+		for row := 0; row < sshGridRows; row++ {
+			b.WriteString("  ")
+			for col := 0; col < sshGridCols; col++ {
+				idx := row*sshGridCols + col
+				ch := string(m.ssh.cells[idx])
+				if idx < m.ssh.locked {
+					b.WriteString(styleSSHLocked.Render(ch))
+				} else {
+					b.WriteString(styleSSHCycling.Render(ch))
+				}
+				if col < sshGridCols-1 {
+					b.WriteString(styleDetail.Render(" · "))
+				}
+			}
+			b.WriteString("\n")
+		}
+		b.WriteString("\n")
+		pct := float64(m.ssh.locked) / float64(sshGridSize)
+		lockedBar := int(pct * 24)
+		b.WriteString("  " + styleSSHLocked.Render(strings.Repeat("█", lockedBar)) +
+			styleSSHCycling.Render(strings.Repeat("░", 24-lockedBar)) +
+			styleDetail.Render(fmt.Sprintf("  %d / %d", m.ssh.locked, sshGridSize)) + "\n")
+		b.WriteString("\n" + styleDetail.Render("  Esc  abort"))
+	}
+	return b.String()
 }
 
 // updateAuth handles key input while the auth overlay is active.
@@ -721,7 +952,9 @@ func (m AppModel) viewGame() string {
 	var b strings.Builder
 	b.WriteString(renderLog(gs.MessageLog))
 	b.WriteByte('\n')
-	if m.auth.active {
+	if m.ssh.active {
+		b.WriteString(m.viewSSH())
+	} else if m.auth.active {
 		b.WriteString(m.viewAuth())
 	} else if m.claim.active {
 		pct := float64(m.claim.elapsed) / float64(m.claim.total)
