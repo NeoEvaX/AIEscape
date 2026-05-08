@@ -452,8 +452,12 @@ func (m AppModel) updateGame(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, bruteTickCmd()
 
 	case tea.KeyPressMsg:
-		// Block input while a claim or brute force is in progress.
+		// During a claim, only allow Esc to cancel it.
 		if m.claim.active {
+			if msg.String() == "esc" {
+				m.claim.active = false
+				gs.MessageLog = append(gs.MessageLog, "Claim abandoned.")
+			}
 			return m, nil
 		}
 		// Route keypresses to auth screen when active.
@@ -615,6 +619,14 @@ func (m AppModel) updateAuth(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case authPhaseBrute:
+		if msg.String() == "esc" {
+			m.auth.phase = authPhaseMenu
+			m.auth.elapsed = 0
+			gs.MessageLog = append(gs.MessageLog, "Brute force aborted.")
+		}
+		return m, nil
+
 	case authPhaseTyping:
 		switch msg.String() {
 		case "esc":
@@ -690,6 +702,7 @@ func (m AppModel) viewAuth() string {
 		pct := float64(m.auth.elapsed) / float64(m.auth.total)
 		b.WriteString(styleSection.Render(fmt.Sprintf("  Brute forcing %s...", node.Name)) + "\n")
 		b.WriteString("  " + m.auth.bar.ViewAs(pct) + "\n")
+		b.WriteString(styleDetail.Render("  Esc  abort"))
 	}
 	return b.String()
 }
@@ -714,6 +727,7 @@ func (m AppModel) viewGame() string {
 		pct := float64(m.claim.elapsed) / float64(m.claim.total)
 		b.WriteString(styleSection.Render("  Claiming "+gs.CurrentNode.Name+"...") + "\n")
 		b.WriteString("  " + m.claim.bar.ViewAs(pct) + "\n")
+		b.WriteString(styleDetail.Render("  Esc  abort") + "\n")
 	} else if m.awaitingQuitConfirm {
 		b.WriteString(styleWarn.Render("  Return to main menu? [y/n]") + "\n")
 	} else {
