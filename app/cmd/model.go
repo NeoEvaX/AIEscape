@@ -498,6 +498,5 @@ func (gs *GameState) openItem(item *Item) {
 }
 
 func nodeInfo(n *Node) string {
-	return fmt.Sprintf("[Node %s] %s\n%s\nConnections: %s",
-		n.ID, n.Name, n.Description, strings.Join(n.Connections, ", "))
+	return fmt.Sprintf("[Node %s] %s\n%s", n.ID, n.Name, n.Description)
 }

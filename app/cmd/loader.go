@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"strings"
 )
 
 type networkFile struct {
@@ -56,7 +55,7 @@ func loadNetwork(path string) (*Network, error) {
 		}
 		// Auto-generate a self-referencing location file for this node.
 		// Assimilating it lets a player connect here from anywhere.
-		locName := strings.ToLower(strings.ReplaceAll(n.Name, " ", "_")) + ".loc"
+		locName := "node_" + n.ID + ".loc"
 		locPayload, _ := json.Marshal(NetworkLocationPayload{NodeID: n.ID})
 		files = append(files, Item{
 			ID:      "f-" + n.ID + "-loc",
