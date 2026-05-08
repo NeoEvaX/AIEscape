@@ -34,6 +34,13 @@ func (n *Network) CanReach(from, to string) bool {
 	return false
 }
 
+type openContext int
+
+const (
+	openContextNode      openContext = iota // open reads from current node
+	openContextInventory                    // open reads from inventory
+)
+
 type GameState struct {
 	SaveID           int64
 	SaveName         string
@@ -42,6 +49,7 @@ type GameState struct {
 	VisitedNodes     map[string]bool
 	DeletedNodeFiles map[string]bool // item IDs deleted from nodes in this save
 	Inventory        []Item
+	OpenCtx          openContext // determines what 'open' targets
 	Input            textinput.Model
 	Viewport         viewport.Model
 	MessageLog       []string
@@ -172,6 +180,67 @@ func (gs *GameState) inInventory(id string) bool {
 	return false
 }
 
+// tabComplete attempts to complete the current input.
+// Returns the completed string and true if a unique match was found.
+func (gs *GameState) tabComplete(input string) (string, bool) {
+	type rule struct {
+		prefix     string
+		sourceFunc func() []string
+	}
+
+	nodeNames := func() []string {
+		files := gs.nodeFiles()
+		names := make([]string, len(files))
+		for i, f := range files {
+			names[i] = f.Name
+		}
+		return names
+	}
+	invNames := func() []string {
+		names := make([]string, len(gs.Inventory))
+		for i, item := range gs.Inventory {
+			names[i] = item.Name
+		}
+		return names
+	}
+
+	// Determine open's source based on context.
+	openSource := nodeNames
+	if gs.OpenCtx == openContextInventory {
+		openSource = invNames
+	}
+
+	rules := []rule{
+		{"open -n ", nodeNames},
+		{"open -i ", invNames},
+		{"open ", openSource},
+		{"delete ", nodeNames},
+		{"rm ", invNames},
+	}
+
+	for _, r := range rules {
+		if !strings.HasPrefix(input, r.prefix) {
+			continue
+		}
+		// Exclude "open " matching "open -..." inputs
+		if r.prefix == "open " && strings.HasPrefix(input, "open -") {
+			continue
+		}
+		namePrefix := input[len(r.prefix):]
+		var matches []string
+		for _, name := range r.sourceFunc() {
+			if strings.HasPrefix(strings.ToLower(name), strings.ToLower(namePrefix)) {
+				matches = append(matches, name)
+			}
+		}
+		if len(matches) == 1 {
+			return r.prefix + matches[0], true
+		}
+		return input, false
+	}
+	return input, false
+}
+
 // ── Game logic ────────────────────────────────────────────────────────────────
 
 type gameAction int
@@ -204,8 +273,9 @@ func (gs *GameState) handleCommand(input string) gameAction {
 			"  assimilate <name>     - copy a file from this node into your inventory",
 			"  delete <name>         - permanently delete a file from this node",
 			"  inventory, inv        - list your assimilated files",
-			"  open <name>           - display a file from your inventory",
-			"  open -n <name>        - display a file directly from this node",
+			"  open <name>           - display a file (node or inventory based on context)",
+			"  open -n <name>        - force open from current node",
+			"  open -i <name>        - force open from inventory",
 			"  rm <name>             - remove a file from your inventory",
 			"  quit, exit            - return to the main menu",
 			"  help, ?               - show this help message",
@@ -214,6 +284,7 @@ func (gs *GameState) handleCommand(input string) gameAction {
 	// ── Navigation ────────────────────────────────────────────────────────────
 
 	case "scan":
+		gs.OpenCtx = openContextNode
 		gs.MessageLog = append(gs.MessageLog, "Connected nodes: "+strings.Join(gs.CurrentNode.Connections, ", "))
 
 	case "connect":
@@ -234,12 +305,14 @@ func (gs *GameState) handleCommand(input string) gameAction {
 		target.Discovered = true
 		gs.CurrentNode = target
 		gs.VisitedNodes[target.ID] = true
+		gs.OpenCtx = openContextNode
 		gs.MessageLog = append(gs.MessageLog, nodeInfo(target))
 		return actionPersist
 
 	// ── Node file commands ────────────────────────────────────────────────────
 
 	case "ls", "list":
+		gs.OpenCtx = openContextNode
 		files := gs.nodeFiles()
 		if len(files) == 0 {
 			gs.MessageLog = append(gs.MessageLog, "No files on this node.")
@@ -293,6 +366,7 @@ func (gs *GameState) handleCommand(input string) gameAction {
 	// ── Inventory commands ────────────────────────────────────────────────────
 
 	case "inventory", "inv":
+		gs.OpenCtx = openContextInventory
 		if len(gs.Inventory) == 0 {
 			gs.MessageLog = append(gs.MessageLog, "No files assimilated.")
 		} else {
@@ -305,30 +379,35 @@ func (gs *GameState) handleCommand(input string) gameAction {
 		}
 
 	case "open":
-		// Usage: open [-n] <id>
-		//   -n  open a file from the current node instead of inventory
-		fromNode := false
+		// Usage: open [-n|-i] <name>
+		//   -n  force open from current node regardless of context
+		//   -i  force open from inventory regardless of context
+		//   Without a flag: opens from node normally, or inventory after 'inventory' command
+		fromNode := gs.OpenCtx == openContextNode
 		args := parts[1:]
 		if len(args) > 0 && args[0] == "-n" {
 			fromNode = true
 			args = args[1:]
+		} else if len(args) > 0 && args[0] == "-i" {
+			fromNode = false
+			args = args[1:]
 		}
 		if len(args) == 0 {
-			gs.MessageLog = append(gs.MessageLog, "Usage: open [-n] <id>  (-n to open from this node)")
+			gs.MessageLog = append(gs.MessageLog, "Usage: open [-n] <name>")
 			return actionNone
 		}
-		fileID := args[0]
+		query := args[0]
 		var item *Item
 		if fromNode {
-			item = gs.findNodeFile(fileID)
+			item = gs.findNodeFile(query)
 			if item == nil {
-				gs.MessageLog = append(gs.MessageLog, fmt.Sprintf("File %q not found on this node.", fileID))
+				gs.MessageLog = append(gs.MessageLog, fmt.Sprintf("File %q not found on this node.", query))
 				return actionNone
 			}
 		} else {
-			item = gs.findInventoryItem(fileID)
+			item = gs.findInventoryItem(query)
 			if item == nil {
-				gs.MessageLog = append(gs.MessageLog, fmt.Sprintf("File %q not in inventory.", fileID))
+				gs.MessageLog = append(gs.MessageLog, fmt.Sprintf("File %q not in inventory.", query))
 				return actionNone
 			}
 		}

@@ -357,6 +357,12 @@ func (m AppModel) updateGame(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg.String() {
 		case "ctrl+c":
 			return m, tea.Quit
+		case "tab":
+			if completed, ok := gs.tabComplete(gs.Input.Value()); ok {
+				gs.Input.SetValue(completed)
+				gs.Input.CursorEnd()
+			}
+			return m, nil
 		case "enter":
 			input := strings.TrimSpace(gs.Input.Value())
 			gs.Input.SetValue("")
