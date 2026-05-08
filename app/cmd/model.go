@@ -6,6 +6,7 @@ import (
 
 	"charm.land/bubbles/v2/textinput"
 	"charm.land/bubbles/v2/viewport"
+	"charm.land/lipgloss/v2"
 )
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -75,7 +76,12 @@ type GameState struct {
 
 func newGameState(network *Network, saveID int64, saveName string, startNode *Node) *GameState {
 	ti := textinput.New()
-	ti.Placeholder = "Type a command..."
+	ti.Placeholder = "type a command..."
+	ti.Prompt = "▶ "
+	s := ti.Styles()
+	s.Focused.Prompt = lipgloss.NewStyle().Foreground(lipgloss.Color("#39D353")).Bold(true)
+	s.Focused.Text = lipgloss.NewStyle().Foreground(lipgloss.Color("#E2E8F0"))
+	ti.SetStyles(s)
 	ti.Focus()
 
 	return &GameState{
@@ -96,7 +102,12 @@ func newGameState(network *Network, saveID int64, saveName string, startNode *No
 
 func newGameStateFromSave(network *Network, save *Save, currentNode *Node, visited, deletedNodeFiles, claimedNodes []string, inventory []Item, stats PlayerStats) *GameState {
 	ti := textinput.New()
-	ti.Placeholder = "Type a command..."
+	ti.Placeholder = "type a command..."
+	ti.Prompt = "▶ "
+	s := ti.Styles()
+	s.Focused.Prompt = lipgloss.NewStyle().Foreground(lipgloss.Color("#39D353")).Bold(true)
+	s.Focused.Text = lipgloss.NewStyle().Foreground(lipgloss.Color("#E2E8F0"))
+	ti.SetStyles(s)
 	ti.Focus()
 
 	visitedMap := make(map[string]bool, len(visited))

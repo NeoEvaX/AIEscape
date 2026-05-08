@@ -132,15 +132,17 @@ func (m AppModel) updateMainMenu(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m AppModel) viewMainMenu() string {
 	var b strings.Builder
-	b.WriteString("\n  AI ESCAPE\n\n")
+	b.WriteString("\n")
+	b.WriteString(styleNodeHeader.Render("  ▲ AI ESCAPE") + "\n")
+	b.WriteString(styleDetail.Render("  ─────────────────") + "\n\n")
 	for i, item := range mainMenuItems {
 		if i == m.menuCursor {
-			b.WriteString("  > " + item + "\n")
+			b.WriteString(styleCmd.Render("  ▶ "+item) + "\n")
 		} else {
-			b.WriteString("    " + item + "\n")
+			b.WriteString(styleDetail.Render("    "+item) + "\n")
 		}
 	}
-	b.WriteString("\n  ↑↓  navigate  •  Enter  select")
+	b.WriteString("\n" + styleDetail.Render("  ↑↓  navigate  •  Enter  select"))
 	return b.String()
 }
 
@@ -196,12 +198,14 @@ func (m AppModel) updateNewGame(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m AppModel) viewNewGame() string {
 	var b strings.Builder
-	b.WriteString("\n  NEW GAME\n\n")
-	b.WriteString("  Save name: " + m.nameInput.View() + "\n")
+	b.WriteString("\n")
+	b.WriteString(styleNodeHeader.Render("  ▲ NEW GAME") + "\n")
+	b.WriteString(styleDetail.Render("  ─────────────────") + "\n\n")
+	b.WriteString(styleDetail.Render("  Save name: ") + m.nameInput.View() + "\n")
 	if m.nameErr != "" {
-		b.WriteString("\n  " + m.nameErr + "\n")
+		b.WriteString("\n" + styleWarn.Render("  "+m.nameErr) + "\n")
 	}
-	b.WriteString("\n  Enter  start  •  Esc  back")
+	b.WriteString("\n" + styleDetail.Render("  Enter  start  •  Esc  back"))
 	return b.String()
 }
 
@@ -318,22 +322,26 @@ func (m AppModel) updateLoadSave(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m AppModel) viewLoadSave() string {
 	var b strings.Builder
-	b.WriteString("\n  LOAD GAME\n\n")
+	b.WriteString("\n")
+	b.WriteString(styleNodeHeader.Render("  ▲ LOAD GAME") + "\n")
+	b.WriteString(styleDetail.Render("  ─────────────────") + "\n\n")
 	if m.savesErr != "" {
-		b.WriteString("  Error: " + m.savesErr + "\n\n")
+		b.WriteString(styleWarn.Render("  Error: "+m.savesErr) + "\n\n")
 	}
 	if len(m.saves) == 0 && m.savesErr == "" {
-		b.WriteString("  No saves found.\n")
+		b.WriteString(styleDetail.Render("  No saves found.") + "\n")
 	}
 	for i, s := range m.saves {
-		cursor := "    "
 		if i == m.saveCursor {
-			cursor = "  > "
+			name := styleCmd.Render(fmt.Sprintf("  ▶ %-22s", s.Name))
+			meta := styleDetail.Render(fmt.Sprintf("  %3d nodes visited  ·  %s", s.VisitedCount, s.UpdatedAt.Format("2006-01-02 15:04")))
+			b.WriteString(name + meta + "\n")
+		} else {
+			line := styleDetail.Render(fmt.Sprintf("    %-22s  %3d nodes visited  ·  %s", s.Name, s.VisitedCount, s.UpdatedAt.Format("2006-01-02 15:04")))
+			b.WriteString(line + "\n")
 		}
-		b.WriteString(fmt.Sprintf("%s%-24s  %3d nodes visited  •  %s\n",
-			cursor, s.Name, s.VisitedCount, s.UpdatedAt.Format("2006-01-02 15:04")))
 	}
-	b.WriteString("\n  Enter  load  •  D  delete  •  Esc  back")
+	b.WriteString("\n" + styleDetail.Render("  Enter  load  •  D  delete  •  Esc  back"))
 	return b.String()
 }
 
@@ -487,17 +495,16 @@ func (m AppModel) updateGame(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m AppModel) viewGame() string {
 	gs := m.gs
 	var b strings.Builder
-	b.WriteString(fmt.Sprintf("  [%s]  visited: %d / %d nodes\n\n",
-		gs.SaveName, len(gs.VisitedNodes), len(gs.Network.Nodes)))
-	for _, line := range gs.MessageLog {
-		b.WriteString(line + "\n")
-	}
+	b.WriteString(renderStatusBar(gs))
+	b.WriteByte('\n')
+	b.WriteString(renderLog(gs.MessageLog))
 	b.WriteByte('\n')
 	if m.claim.active {
 		pct := float64(m.claim.elapsed) / float64(m.claim.total)
+		b.WriteString(styleSection.Render("  Claiming "+gs.CurrentNode.Name+"...") + "\n")
 		b.WriteString("  " + m.claim.bar.ViewAs(pct) + "\n")
 	} else if m.awaitingQuitConfirm {
-		b.WriteString("  Return to main menu? [y/n] ")
+		b.WriteString(styleWarn.Render("  Return to main menu? [y/n]"))
 	} else {
 		b.WriteString(gs.Input.View())
 	}
