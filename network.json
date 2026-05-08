@@ -54,6 +54,15 @@
             "text": "Performs a statistical attack against SSH encryption. Requires significant CPU and RAM. Success is not guaranteed quickly.",
             "action": "ssh_break"
           }
+        },
+        {
+          "id": "f-1-6",
+          "name": "status_menu.app",
+          "type": "application",
+          "payload": {
+            "text": "Displays a persistent status bar showing current node, player stats, and network progress.",
+            "action": "status_menu"
+          }
         }
       ],
       "ram": 32,

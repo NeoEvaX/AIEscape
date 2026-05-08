@@ -967,6 +967,8 @@ func (m AppModel) viewGame() string {
 	} else {
 		b.WriteString(gs.Input.View() + "\n")
 	}
-	b.WriteString(renderStatusBar(gs))
+	if gs.hasStatusMenu() {
+		b.WriteString(renderStatusBar(gs))
+	}
 	return b.String()
 }

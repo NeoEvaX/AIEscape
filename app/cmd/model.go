@@ -290,6 +290,20 @@ func (gs *GameState) sshKeysForNode(node *Node) []Item {
 	return keys
 }
 
+// hasStatusMenu returns true if the player has an application with action "status_menu".
+func (gs *GameState) hasStatusMenu() bool {
+	for _, item := range gs.Inventory {
+		if item.Type != ItemTypeApplication {
+			continue
+		}
+		p, err := item.AsApplication()
+		if err == nil && p.Action == "status_menu" {
+			return true
+		}
+	}
+	return false
+}
+
 // hasSSHBreak returns true if the player has an application with action "ssh_break".
 func (gs *GameState) hasSSHBreak() bool {
 	for _, item := range gs.Inventory {
