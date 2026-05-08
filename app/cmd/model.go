@@ -16,6 +16,7 @@ type Node struct {
 	Description string
 	Connections []string
 	Files       []Item
+	Dark        bool // dark nodes are hidden from scan unless player has the location file
 	Discovered  bool
 }
 
@@ -180,6 +181,21 @@ func (gs *GameState) inInventory(id string) bool {
 	return false
 }
 
+// hasLocationFile returns true if inventory contains a network_location file
+// pointing to the given node ID.
+func (gs *GameState) hasLocationFile(nodeID string) bool {
+	for _, item := range gs.Inventory {
+		if item.Type != ItemTypeNetworkLocation {
+			continue
+		}
+		p, err := item.AsNetworkLocation()
+		if err == nil && p.NodeID == nodeID {
+			return true
+		}
+	}
+	return false
+}
+
 // tabComplete attempts to complete the current input.
 // Returns the completed string and true if a unique match was found.
 func (gs *GameState) tabComplete(input string) (string, bool) {
@@ -285,7 +301,19 @@ func (gs *GameState) handleCommand(input string) gameAction {
 
 	case "scan":
 		gs.OpenCtx = openContextNode
-		gs.MessageLog = append(gs.MessageLog, "Connected nodes: "+strings.Join(gs.CurrentNode.Connections, ", "))
+		var visible []string
+		for _, id := range gs.CurrentNode.Connections {
+			node, ok := gs.Network.Nodes[id]
+			if ok && node.Dark && !gs.hasLocationFile(id) {
+				continue
+			}
+			visible = append(visible, id)
+		}
+		if len(visible) == 0 {
+			gs.MessageLog = append(gs.MessageLog, "No nodes detected.")
+		} else {
+			gs.MessageLog = append(gs.MessageLog, "Connected nodes: "+strings.Join(visible, ", "))
+		}
 
 	case "connect":
 		if len(parts) < 2 {
@@ -299,8 +327,11 @@ func (gs *GameState) handleCommand(input string) gameAction {
 			return actionNone
 		}
 		if !gs.Network.CanReach(gs.CurrentNode.ID, targetID) {
-			gs.MessageLog = append(gs.MessageLog, fmt.Sprintf("No direct connection to node %s from here.", targetID))
-			return actionNone
+			if !gs.hasLocationFile(targetID) {
+				gs.MessageLog = append(gs.MessageLog, fmt.Sprintf("No direct connection to node %s from here.", targetID))
+				return actionNone
+			}
+			gs.MessageLog = append(gs.MessageLog, fmt.Sprintf("Routing via location file to node %s.", targetID))
 		}
 		target.Discovered = true
 		gs.CurrentNode = target
