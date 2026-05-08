@@ -3,7 +3,9 @@ package main
 import (
 	"fmt"
 	"strings"
+	"time"
 
+	"charm.land/bubbles/v2/progress"
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 )
@@ -18,6 +20,14 @@ const (
 )
 
 var mainMenuItems = []string{"New Game", "Load Game", "Quit"}
+
+type claimState struct {
+	active   bool
+	nodeID   string
+	elapsed  time.Duration
+	total    time.Duration
+	bar      progress.Model
+}
 
 type AppModel struct {
 	screen  Screen
@@ -37,8 +47,9 @@ type AppModel struct {
 	savesErr   string
 
 	// Game
-	gs                 *GameState
+	gs                  *GameState
 	awaitingQuitConfirm bool
+	claim               claimState
 }
 
 func NewAppModel(db *Database, network *Network) AppModel {
@@ -221,6 +232,7 @@ type saveLoadedMsg struct {
 	visited          []string
 	inventory        []Item
 	deletedNodeFiles []string
+	claimedNodes     []string
 	err              error
 }
 
@@ -235,8 +247,12 @@ func loadSaveCmd(db *Database, id int64) tea.Cmd {
 			return saveLoadedMsg{err: err}
 		}
 		deleted, err := db.GetDeletedNodeFiles(id)
+		if err != nil {
+			return saveLoadedMsg{err: err}
+		}
+		claimed, err := db.GetClaimedNodes(id)
 		// stats are embedded in save via LoadSave
-		return saveLoadedMsg{save: save, visited: visited, inventory: inventory, deletedNodeFiles: deleted, err: err}
+		return saveLoadedMsg{save: save, visited: visited, inventory: inventory, deletedNodeFiles: deleted, claimedNodes: claimed, err: err}
 	}
 }
 
@@ -264,7 +280,7 @@ func (m AppModel) updateLoadSave(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		currentNode := m.network.Nodes[msg.save.CurrentNodeID]
-		m.gs = newGameStateFromSave(m.network, msg.save, currentNode, msg.visited, msg.deletedNodeFiles, msg.inventory, msg.save.Stats)
+		m.gs = newGameStateFromSave(m.network, msg.save, currentNode, msg.visited, msg.deletedNodeFiles, msg.claimedNodes, msg.inventory, msg.save.Stats)
 		m.screen = ScreenGame
 		return m, nil
 
@@ -325,15 +341,25 @@ func (m AppModel) viewLoadSave() string {
 
 type gameSavedMsg struct{ err error }
 
+type tickMsg struct{}
+
+func tickCmd() tea.Cmd {
+	return func() tea.Msg {
+		time.Sleep(100 * time.Millisecond)
+		return tickMsg{}
+	}
+}
+
 func persistSaveCmd(db *Database, gs *GameState) tea.Cmd {
 	saveID := gs.SaveID
 	currentNodeID := gs.CurrentNode.ID
 	visited := gs.visitedList()
 	deleted := gs.deletedFilesList()
 	inventory := gs.inventoryIDs()
+	claimed := gs.claimedList()
 	stats := gs.Stats
 	return func() tea.Msg {
-		return gameSavedMsg{err: db.UpdateSave(saveID, currentNodeID, visited, deleted, inventory, stats)}
+		return gameSavedMsg{err: db.UpdateSave(saveID, currentNodeID, visited, deleted, inventory, claimed, stats)}
 	}
 }
 
@@ -342,7 +368,34 @@ func (m AppModel) updateGame(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case gameSavedMsg:
 		return m, nil
+
+	case tickMsg:
+		if !m.claim.active {
+			return m, nil
+		}
+		m.claim.elapsed += 100 * time.Millisecond
+		if m.claim.elapsed >= m.claim.total {
+			// Claim complete — apply stats.
+			m.claim.active = false
+			node := gs.Network.Nodes[m.claim.nodeID]
+			claimSkill := gs.Stats.ClaimSkill
+			ramGain := max(1, int(float64(node.RAM)*float64(claimSkill)/100.0))
+			cpuGain := max(1, int(float64(node.CPU)*float64(claimSkill)/100.0))
+			gs.Stats.RAM += ramGain
+			gs.Stats.CPU += cpuGain
+			gs.ClaimedNodes[m.claim.nodeID] = true
+			gs.MessageLog = append(gs.MessageLog,
+				fmt.Sprintf("Claim complete. +%d RAM  +%d CPU", ramGain, cpuGain))
+			return m, persistSaveCmd(m.db, gs)
+		}
+		return m, tickCmd()
+
 	case tea.KeyPressMsg:
+		// Block input while a claim is in progress.
+		if m.claim.active {
+			return m, nil
+		}
+
 		// Intercept confirmation prompt before normal input handling.
 		if m.awaitingQuitConfirm {
 			switch msg.String() {
@@ -374,6 +427,24 @@ func (m AppModel) updateGame(msg tea.Msg) (tea.Model, tea.Cmd) {
 					return m, persistSaveCmd(m.db, gs)
 				case actionQuit:
 					m.awaitingQuitConfirm = true
+				case actionClaim:
+					node := gs.CurrentNode
+					playerCPU := gs.Stats.CPU
+					if playerCPU < 1 {
+						playerCPU = 1
+					}
+					secs := float64(node.CPU) / float64(playerCPU)
+					if secs < 0.5 {
+						secs = 0.5
+					}
+					m.claim = claimState{
+						active:  true,
+						nodeID:  node.ID,
+						elapsed: 0,
+						total:   time.Duration(secs * float64(time.Second)),
+						bar:     progress.New(progress.WithDefaultBlend(), progress.WithWidth(40)),
+					}
+					return m, tickCmd()
 				}
 			}
 			return m, nil
@@ -393,7 +464,10 @@ func (m AppModel) viewGame() string {
 		b.WriteString(line + "\n")
 	}
 	b.WriteByte('\n')
-	if m.awaitingQuitConfirm {
+	if m.claim.active {
+		pct := float64(m.claim.elapsed) / float64(m.claim.total)
+		b.WriteString("  " + m.claim.bar.ViewAs(pct) + "\n")
+	} else if m.awaitingQuitConfirm {
 		b.WriteString("  Return to main menu? [y/n] ")
 	} else {
 		b.WriteString(gs.Input.View())

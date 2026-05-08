@@ -57,6 +57,7 @@ type GameState struct {
 	CurrentNode      *Node
 	VisitedNodes     map[string]bool
 	DeletedNodeFiles map[string]bool // item IDs deleted from nodes in this save
+	ClaimedNodes     map[string]bool // node IDs already claimed in this save
 	Inventory        []Item
 	Stats            PlayerStats
 	OpenCtx          openContext // determines what 'open' targets
@@ -79,6 +80,7 @@ func newGameState(network *Network, saveID int64, saveName string, startNode *No
 		CurrentNode:      startNode,
 		VisitedNodes:     map[string]bool{startNode.ID: true},
 		DeletedNodeFiles: map[string]bool{},
+		ClaimedNodes:     map[string]bool{},
 		Inventory:        []Item{},
 		Stats:            PlayerStats{RAM: 1, CPU: 1, ClaimSkill: 1},
 		Input:            ti,
@@ -86,7 +88,7 @@ func newGameState(network *Network, saveID int64, saveName string, startNode *No
 	}
 }
 
-func newGameStateFromSave(network *Network, save *Save, currentNode *Node, visited, deletedNodeFiles []string, inventory []Item, stats PlayerStats) *GameState {
+func newGameStateFromSave(network *Network, save *Save, currentNode *Node, visited, deletedNodeFiles, claimedNodes []string, inventory []Item, stats PlayerStats) *GameState {
 	ti := textinput.New()
 	ti.Placeholder = "Type a command..."
 	ti.Focus()
@@ -104,6 +106,11 @@ func newGameStateFromSave(network *Network, save *Save, currentNode *Node, visit
 		deletedMap[id] = true
 	}
 
+	claimedMap := make(map[string]bool, len(claimedNodes))
+	for _, id := range claimedNodes {
+		claimedMap[id] = true
+	}
+
 	if inventory == nil {
 		inventory = []Item{}
 	}
@@ -115,6 +122,7 @@ func newGameStateFromSave(network *Network, save *Save, currentNode *Node, visit
 		CurrentNode:      currentNode,
 		VisitedNodes:     visitedMap,
 		DeletedNodeFiles: deletedMap,
+		ClaimedNodes:     claimedMap,
 		Inventory:        inventory,
 		Stats:            stats,
 		Input:            ti,
@@ -135,6 +143,14 @@ func (gs *GameState) visitedList() []string {
 func (gs *GameState) deletedFilesList() []string {
 	list := make([]string, 0, len(gs.DeletedNodeFiles))
 	for id := range gs.DeletedNodeFiles {
+		list = append(list, id)
+	}
+	return list
+}
+
+func (gs *GameState) claimedList() []string {
+	list := make([]string, 0, len(gs.ClaimedNodes))
+	for id := range gs.ClaimedNodes {
 		list = append(list, id)
 	}
 	return list
@@ -276,6 +292,7 @@ const (
 	actionNone    gameAction = iota
 	actionPersist            // any change that should be written to DB
 	actionQuit               // player wants to return to main menu
+	actionClaim              // begin a timed claim on the current node
 )
 
 // handleCommand processes user input and returns the resulting action.
@@ -304,6 +321,7 @@ func (gs *GameState) handleCommand(input string) gameAction {
 			"  open -n <name>        - force open from current node",
 			"  open -i <name>        - force open from inventory",
 			"  rm <name>             - remove a file from your inventory",
+			"  claim                 - claim CPU and RAM from the current node",
 			"  stats                 - show player stats",
 			"  quit, exit            - return to the main menu",
 			"  help, ?               - show this help message",
@@ -474,6 +492,17 @@ func (gs *GameState) handleCommand(input string) gameAction {
 				return actionPersist
 			}
 		}
+
+	// ── Claim ─────────────────────────────────────────────────────────────────
+
+	case "claim":
+		if gs.ClaimedNodes[gs.CurrentNode.ID] {
+			gs.MessageLog = append(gs.MessageLog, "You have already claimed resources from this node.")
+			return actionNone
+		}
+		gs.MessageLog = append(gs.MessageLog,
+			fmt.Sprintf("Initiating resource claim on %s...", gs.CurrentNode.Name))
+		return actionClaim
 
 	// ── Meta ──────────────────────────────────────────────────────────────────
 

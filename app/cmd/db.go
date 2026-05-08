@@ -67,6 +67,12 @@ func (d *Database) migrate() error {
 			item_id  TEXT    NOT NULL,
 			PRIMARY KEY (save_id, item_id)
 		)`,
+		// Nodes the player has already claimed resources from (per-save).
+		`CREATE TABLE IF NOT EXISTS save_claimed_nodes (
+			save_id  INTEGER NOT NULL REFERENCES saves(id) ON DELETE CASCADE,
+			node_id  TEXT    NOT NULL,
+			PRIMARY KEY (save_id, node_id)
+		)`,
 	}
 	for _, s := range stmts {
 		if _, err := d.conn.Exec(s); err != nil {
@@ -125,6 +131,26 @@ func (d *Database) GetInventory(saveID int64) ([]Item, error) {
 func (d *Database) GetDeletedNodeFiles(saveID int64) ([]string, error) {
 	rows, err := d.conn.Query(
 		`SELECT item_id FROM save_deleted_node_files WHERE save_id = ?`, saveID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var ids []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	return ids, rows.Err()
+}
+
+func (d *Database) GetClaimedNodes(saveID int64) ([]string, error) {
+	rows, err := d.conn.Query(
+		`SELECT node_id FROM save_claimed_nodes WHERE save_id = ?`, saveID,
 	)
 	if err != nil {
 		return nil, err
@@ -220,7 +246,7 @@ func (d *Database) LoadSave(id int64) (*Save, []string, error) {
 }
 
 // UpdateSave persists all mutable save state in a single transaction.
-func (d *Database) UpdateSave(saveID int64, currentNodeID string, visited, deletedNodeFiles, inventoryIDs []string, stats PlayerStats) error {
+func (d *Database) UpdateSave(saveID int64, currentNodeID string, visited, deletedNodeFiles, inventoryIDs, claimedNodes []string, stats PlayerStats) error {
 	tx, err := d.conn.Begin()
 	if err != nil {
 		return err
@@ -237,6 +263,7 @@ func (d *Database) UpdateSave(saveID int64, currentNodeID string, visited, delet
 	replaceList(tx, `visited_nodes`, `node_id`, saveID, visited)
 	replaceList(tx, `save_deleted_node_files`, `item_id`, saveID, deletedNodeFiles)
 	replaceList(tx, `save_items`, `item_id`, saveID, inventoryIDs)
+	replaceList(tx, `save_claimed_nodes`, `node_id`, saveID, claimedNodes)
 
 	return tx.Commit()
 }
