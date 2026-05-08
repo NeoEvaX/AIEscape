@@ -64,6 +64,11 @@ type GameState struct {
 	Input            textinput.Model
 	Viewport         viewport.Model
 	MessageLog       []string
+
+	// Command history (not persisted)
+	History      []string
+	HistoryIdx   int    // index into History when browsing; -1 = not browsing
+	HistoryDraft string // saved draft input while browsing history
 }
 
 // ── Constructors ──────────────────────────────────────────────────────────────
@@ -85,6 +90,7 @@ func newGameState(network *Network, saveID int64, saveName string, startNode *No
 		Stats:            PlayerStats{RAM: 1, CPU: 1, ClaimSkill: 1},
 		Input:            ti,
 		MessageLog:       []string{nodeInfo(startNode)},
+		HistoryIdx:       -1,
 	}
 }
 
@@ -127,6 +133,7 @@ func newGameStateFromSave(network *Network, save *Save, currentNode *Node, visit
 		Stats:            stats,
 		Input:            ti,
 		MessageLog:       []string{nodeInfo(currentNode)},
+		HistoryIdx:       -1,
 	}
 }
 

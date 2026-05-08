@@ -412,6 +412,32 @@ func (m AppModel) updateGame(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg.String() {
 		case "ctrl+c":
 			return m, tea.Quit
+		case "up":
+			if len(gs.History) == 0 {
+				return m, nil
+			}
+			if gs.HistoryIdx == -1 {
+				gs.HistoryDraft = gs.Input.Value()
+				gs.HistoryIdx = len(gs.History) - 1
+			} else if gs.HistoryIdx > 0 {
+				gs.HistoryIdx--
+			}
+			gs.Input.SetValue(gs.History[gs.HistoryIdx])
+			gs.Input.CursorEnd()
+			return m, nil
+		case "down":
+			if gs.HistoryIdx == -1 {
+				return m, nil
+			}
+			gs.HistoryIdx++
+			if gs.HistoryIdx >= len(gs.History) {
+				gs.HistoryIdx = -1
+				gs.Input.SetValue(gs.HistoryDraft)
+			} else {
+				gs.Input.SetValue(gs.History[gs.HistoryIdx])
+			}
+			gs.Input.CursorEnd()
+			return m, nil
 		case "tab":
 			if completed, ok := gs.tabComplete(gs.Input.Value()); ok {
 				gs.Input.SetValue(completed)
@@ -421,7 +447,10 @@ func (m AppModel) updateGame(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "enter":
 			input := strings.TrimSpace(gs.Input.Value())
 			gs.Input.SetValue("")
+			gs.HistoryIdx = -1
+			gs.HistoryDraft = ""
 			if input != "" {
+				gs.History = append(gs.History, input)
 				switch gs.handleCommand(input) {
 				case actionPersist:
 					return m, persistSaveCmd(m.db, gs)
