@@ -3,3 +3,10 @@
 /cmd
 /saves.db
 /app/cmd/cmd
+
+# Distribution builds
+/dist
+
+# Temporary files copied into app/cmd/ during dist builds
+/app/cmd/network.json
+/app/cmd/story.json
