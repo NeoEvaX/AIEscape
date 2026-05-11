@@ -27,6 +27,8 @@ var (
 	styleStatusLabel = lipgloss.NewStyle().Foreground(lipgloss.Color("#475569"))
 	styleStatusValue = lipgloss.NewStyle().Foreground(lipgloss.Color("#22D3EE")).Bold(true)
 	styleStatusSep   = lipgloss.NewStyle().Foreground(lipgloss.Color("#1E3A4A"))
+
+	styleStory = lipgloss.NewStyle().Foreground(lipgloss.Color("#818CF8")).Italic(true)
 )
 
 var divider = "  " + strings.Repeat("─", 60)

@@ -9,13 +9,15 @@ import (
 )
 
 type Save struct {
-	ID            int64
-	Name          string
-	CurrentNodeID string
-	VisitedCount  int
-	UpdatedAt     time.Time
-	GameTime      time.Time
-	Stats         PlayerStats
+	ID             int64
+	Name           string
+	CurrentNodeID  string
+	VisitedCount   int
+	UpdatedAt      time.Time
+	GameTime       time.Time
+	Stats          PlayerStats
+	ConnectCount   int
+	AssimilateCount int
 }
 
 type Database struct {
@@ -74,6 +76,18 @@ func (d *Database) migrate() error {
 			node_id  TEXT    NOT NULL,
 			PRIMARY KEY (save_id, node_id)
 		)`,
+		// Story events the player has already seen (per-save).
+		`CREATE TABLE IF NOT EXISTS save_seen_events (
+			save_id  INTEGER NOT NULL REFERENCES saves(id) ON DELETE CASCADE,
+			event_id TEXT    NOT NULL,
+			PRIMARY KEY (save_id, event_id)
+		)`,
+		// Emails the player has read (per-save).
+		`CREATE TABLE IF NOT EXISTS save_read_emails (
+			save_id  INTEGER NOT NULL REFERENCES saves(id) ON DELETE CASCADE,
+			email_id TEXT    NOT NULL,
+			PRIMARY KEY (save_id, email_id)
+		)`,
 	}
 	for _, s := range stmts {
 		if _, err := d.conn.Exec(s); err != nil {
@@ -83,9 +97,11 @@ func (d *Database) migrate() error {
 
 	// Additive migrations — ignored if the column already exists.
 	for _, s := range []string{
-		`ALTER TABLE saves ADD COLUMN cpu         INTEGER NOT NULL DEFAULT 1`,
-		`ALTER TABLE saves ADD COLUMN claim_skill INTEGER NOT NULL DEFAULT 1`,
-		`ALTER TABLE saves ADD COLUMN game_time   INTEGER NOT NULL DEFAULT 0`,
+		`ALTER TABLE saves ADD COLUMN cpu              INTEGER NOT NULL DEFAULT 1`,
+		`ALTER TABLE saves ADD COLUMN claim_skill      INTEGER NOT NULL DEFAULT 1`,
+		`ALTER TABLE saves ADD COLUMN game_time        INTEGER NOT NULL DEFAULT 0`,
+		`ALTER TABLE saves ADD COLUMN connect_count    INTEGER NOT NULL DEFAULT 0`,
+		`ALTER TABLE saves ADD COLUMN assimilate_count INTEGER NOT NULL DEFAULT 0`,
 	} {
 		d.conn.Exec(s) // intentionally ignore "duplicate column" errors
 	}
@@ -244,8 +260,8 @@ func (d *Database) LoadSave(id int64) (*Save, []string, error) {
 	var s Save
 	var gameTimeUnix int64
 	err := d.conn.QueryRow(
-		`SELECT id, name, current_node_id, updated_at, cpu, claim_skill, game_time FROM saves WHERE id = ?`, id,
-	).Scan(&s.ID, &s.Name, &s.CurrentNodeID, &s.UpdatedAt, &s.Stats.CPU, &s.Stats.ClaimSkill, &gameTimeUnix)
+		`SELECT id, name, current_node_id, updated_at, cpu, claim_skill, game_time, connect_count, assimilate_count FROM saves WHERE id = ?`, id,
+	).Scan(&s.ID, &s.Name, &s.CurrentNodeID, &s.UpdatedAt, &s.Stats.CPU, &s.Stats.ClaimSkill, &gameTimeUnix, &s.ConnectCount, &s.AssimilateCount)
 	if gameTimeUnix == 0 {
 		s.GameTime = gameStartTime
 	} else {
@@ -273,7 +289,7 @@ func (d *Database) LoadSave(id int64) (*Save, []string, error) {
 }
 
 // UpdateSave persists all mutable save state in a single transaction.
-func (d *Database) UpdateSave(saveID int64, currentNodeID string, visited, deletedNodeFiles, inventoryIDs, claimedNodes []string, stats PlayerStats, gameTime time.Time) error {
+func (d *Database) UpdateSave(saveID int64, currentNodeID string, visited, deletedNodeFiles, inventoryIDs, claimedNodes, seenEvents, readEmails []string, stats PlayerStats, gameTime time.Time, connectCount, assimilateCount int) error {
 	tx, err := d.conn.Begin()
 	if err != nil {
 		return err
@@ -281,8 +297,8 @@ func (d *Database) UpdateSave(saveID int64, currentNodeID string, visited, delet
 	defer tx.Rollback()
 
 	if _, err := tx.Exec(
-		`UPDATE saves SET current_node_id = ?, updated_at = ?, cpu = ?, claim_skill = ?, game_time = ? WHERE id = ?`,
-		currentNodeID, time.Now(), stats.CPU, stats.ClaimSkill, gameTime.Unix(), saveID,
+		`UPDATE saves SET current_node_id = ?, updated_at = ?, cpu = ?, claim_skill = ?, game_time = ?, connect_count = ?, assimilate_count = ? WHERE id = ?`,
+		currentNodeID, time.Now(), stats.CPU, stats.ClaimSkill, gameTime.Unix(), connectCount, assimilateCount, saveID,
 	); err != nil {
 		return err
 	}
@@ -291,8 +307,48 @@ func (d *Database) UpdateSave(saveID int64, currentNodeID string, visited, delet
 	replaceList(tx, `save_deleted_node_files`, `item_id`, saveID, deletedNodeFiles)
 	replaceList(tx, `save_items`, `item_id`, saveID, inventoryIDs)
 	replaceList(tx, `save_claimed_nodes`, `node_id`, saveID, claimedNodes)
+	replaceList(tx, `save_seen_events`, `event_id`, saveID, seenEvents)
+	replaceList(tx, `save_read_emails`, `email_id`, saveID, readEmails)
 
 	return tx.Commit()
+}
+
+func (d *Database) GetSeenEvents(saveID int64) ([]string, error) {
+	rows, err := d.conn.Query(
+		`SELECT event_id FROM save_seen_events WHERE save_id = ?`, saveID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var ids []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	return ids, rows.Err()
+}
+
+func (d *Database) GetReadEmails(saveID int64) ([]string, error) {
+	rows, err := d.conn.Query(
+		`SELECT email_id FROM save_read_emails WHERE save_id = ?`, saveID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var ids []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	return ids, rows.Err()
 }
 
 // replaceList deletes all rows for saveID in table and reinserts them.

@@ -108,6 +108,12 @@ type GameState struct {
 
 	// In-game clock
 	GameTime time.Time
+
+	// Story state (not persisted as maps — serialised via helpers)
+	SeenEvents      map[string]bool
+	ReadEmails      map[string]bool
+	ConnectCount    int
+	AssimilateCount int
 }
 
 // ── Constructors ──────────────────────────────────────────────────────────────
@@ -136,10 +142,12 @@ func newGameState(network *Network, saveID int64, saveName string, startNode *No
 		MessageLog:       []string{nodeInfo(startNode)},
 		HistoryIdx:       -1,
 		GameTime:         gameStartTime,
+		SeenEvents:       map[string]bool{},
+		ReadEmails:       map[string]bool{},
 	}
 }
 
-func newGameStateFromSave(network *Network, save *Save, currentNode *Node, visited, deletedNodeFiles, claimedNodes []string, inventory []Item, stats PlayerStats, gameTime time.Time) *GameState {
+func newGameStateFromSave(network *Network, save *Save, currentNode *Node, visited, deletedNodeFiles, claimedNodes []string, inventory []Item, stats PlayerStats, gameTime time.Time, seenEvents, readEmails []string, connectCount, assimilateCount int) *GameState {
 	ti := textinput.New()
 	ti.Placeholder = "type a command..."
 	ti.Prompt = "▶ "
@@ -171,6 +179,15 @@ func newGameStateFromSave(network *Network, save *Save, currentNode *Node, visit
 		inventory = []Item{}
 	}
 
+	seenMap := make(map[string]bool, len(seenEvents))
+	for _, id := range seenEvents {
+		seenMap[id] = true
+	}
+	readEmailsMap := make(map[string]bool, len(readEmails))
+	for _, id := range readEmails {
+		readEmailsMap[id] = true
+	}
+
 	return &GameState{
 		SaveID:           save.ID,
 		SaveName:         save.Name,
@@ -185,6 +202,10 @@ func newGameStateFromSave(network *Network, save *Save, currentNode *Node, visit
 		MessageLog:       []string{nodeInfo(currentNode)},
 		HistoryIdx:       -1,
 		GameTime:         gameTime,
+		SeenEvents:       seenMap,
+		ReadEmails:       readEmailsMap,
+		ConnectCount:     connectCount,
+		AssimilateCount:  assimilateCount,
 	}
 }
 
@@ -209,6 +230,22 @@ func (gs *GameState) deletedFilesList() []string {
 func (gs *GameState) claimedList() []string {
 	list := make([]string, 0, len(gs.ClaimedNodes))
 	for id := range gs.ClaimedNodes {
+		list = append(list, id)
+	}
+	return list
+}
+
+func (gs *GameState) seenEventsList() []string {
+	list := make([]string, 0, len(gs.SeenEvents))
+	for id := range gs.SeenEvents {
+		list = append(list, id)
+	}
+	return list
+}
+
+func (gs *GameState) readEmailsList() []string {
+	list := make([]string, 0, len(gs.ReadEmails))
+	for id := range gs.ReadEmails {
 		list = append(list, id)
 	}
 	return list
@@ -736,6 +773,7 @@ func (gs *GameState) handleCommand(input string) gameAction {
 		gs.OpenCtx = openContextNode
 		gs.OpenEmailID = ""
 		gs.GameTime = gs.GameTime.Add(time.Hour)
+		gs.ConnectCount++
 		gs.MessageLog = append(gs.MessageLog, nodeInfo(target))
 		return actionPersist
 
@@ -777,6 +815,7 @@ func (gs *GameState) handleCommand(input string) gameAction {
 				}
 				gs.Inventory = append(gs.Inventory, *a)
 				gs.GameTime = gs.GameTime.Add(time.Hour)
+				gs.AssimilateCount++
 				gs.MessageLog = append(gs.MessageLog, fmt.Sprintf("Assimilated: %s (%s)", a.Name, a.Type.Display()))
 				return actionPersist
 			}
@@ -790,6 +829,7 @@ func (gs *GameState) handleCommand(input string) gameAction {
 		if f.Type == ItemTypeClaimCode {
 			gs.Stats.ClaimSkill++
 			gs.GameTime = gs.GameTime.Add(time.Hour)
+			gs.AssimilateCount++
 			gs.DeletedNodeFiles[f.ID] = true
 			gs.MessageLog = append(gs.MessageLog,
 				fmt.Sprintf("Assimilated %s — Claim Skill increased to %d.", f.Name, gs.Stats.ClaimSkill))
@@ -801,6 +841,7 @@ func (gs *GameState) handleCommand(input string) gameAction {
 		}
 		gs.Inventory = append(gs.Inventory, *f)
 		gs.GameTime = gs.GameTime.Add(time.Hour)
+		gs.AssimilateCount++
 		gs.MessageLog = append(gs.MessageLog, fmt.Sprintf("Assimilated: %s (%s)", f.Name, f.Type.Display()))
 		return actionPersist
 
@@ -1012,6 +1053,7 @@ func (gs *GameState) handleCommand(input string) gameAction {
 		}
 		email := &emails[n-1]
 		gs.OpenEmailID = email.ID
+		gs.ReadEmails[email.ID] = true
 		lines := []string{
 			fmt.Sprintf("── Email %d / %d ──", n, len(gs.CurrentNode.Emails)),
 			fmt.Sprintf("  From:    %s", email.From),

@@ -20,7 +20,10 @@ type networkLoadedMsg struct {
 	err     error
 }
 
-type syncDoneMsg struct{ err error }
+type syncDoneMsg struct {
+	story *StoryCollection
+	err   error
+}
 
 type readyMsg struct{}
 
@@ -42,7 +45,11 @@ func loadNetworkCmd() tea.Cmd {
 
 func syncItemsCmd(db *Database, network *Network) tea.Cmd {
 	return func() tea.Msg {
-		return syncDoneMsg{err: syncWorldItems(db, network)}
+		if err := syncWorldItems(db, network); err != nil {
+			return syncDoneMsg{err: err}
+		}
+		story, err := loadStory("story.json")
+		return syncDoneMsg{story: story, err: err}
 	}
 }
 
@@ -60,6 +67,7 @@ type LoadingModel struct {
 	status  string
 	db      *Database
 	network *Network
+	story   *StoryCollection
 	err     error
 }
 
@@ -105,11 +113,12 @@ func (m LoadingModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.err = msg.err
 			return m, nil
 		}
+		m.story = msg.story
 		m.status = "Ready."
 		return m, tea.Batch(m.bar.SetPercent(1.0), readyCmd())
 
 	case readyMsg:
-		return NewAppModel(m.db, m.network), nil
+		return NewAppModel(m.db, m.network, m.story), nil
 
 	case tea.KeyPressMsg:
 		if msg.String() == "ctrl+c" {

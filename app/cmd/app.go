@@ -112,6 +112,7 @@ type AppModel struct {
 	screen  Screen
 	db      *Database
 	network *Network
+	story   *StoryCollection
 
 	// Main menu
 	menuCursor int
@@ -131,13 +132,19 @@ type AppModel struct {
 	claim               claimState
 	auth                connectAuthState
 	ssh                 sshAuthState
+
+	// Story typewriter
+	storyQueue []StoryEvent
+	storyText  string
+	storyPos   int
 }
 
-func NewAppModel(db *Database, network *Network) AppModel {
+func NewAppModel(db *Database, network *Network, story *StoryCollection) AppModel {
 	return AppModel{
 		screen:  ScreenMainMenu,
 		db:      db,
 		network: network,
+		story:   story,
 	}
 }
 
@@ -251,7 +258,8 @@ func (m AppModel) updateNewGame(msg tea.Msg) (tea.Model, tea.Cmd) {
 		startNode := m.network.Nodes[m.network.StartNodeID]
 		m.gs = newGameState(m.network, msg.id, strings.TrimSpace(m.nameInput.Value()), startNode)
 		m.screen = ScreenGame
-		return m, nil
+		m, stCmd := m.withStoryCheck(m.gs)
+		return m, stCmd
 
 	case tea.KeyPressMsg:
 		switch msg.String() {
@@ -318,6 +326,8 @@ type saveLoadedMsg struct {
 	inventory        []Item
 	deletedNodeFiles []string
 	claimedNodes     []string
+	seenEvents       []string
+	readEmails       []string
 	err              error
 }
 
@@ -336,8 +346,21 @@ func loadSaveCmd(db *Database, id int64) tea.Cmd {
 			return saveLoadedMsg{err: err}
 		}
 		claimed, err := db.GetClaimedNodes(id)
+		if err != nil {
+			return saveLoadedMsg{err: err}
+		}
+		seenEvents, err := db.GetSeenEvents(id)
+		if err != nil {
+			return saveLoadedMsg{err: err}
+		}
+		readEmails, err := db.GetReadEmails(id)
 		// stats are embedded in save via LoadSave
-		return saveLoadedMsg{save: save, visited: visited, inventory: inventory, deletedNodeFiles: deleted, claimedNodes: claimed, err: err}
+		return saveLoadedMsg{
+			save: save, visited: visited, inventory: inventory,
+			deletedNodeFiles: deleted, claimedNodes: claimed,
+			seenEvents: seenEvents, readEmails: readEmails,
+			err: err,
+		}
 	}
 }
 
@@ -365,9 +388,10 @@ func (m AppModel) updateLoadSave(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		currentNode := m.network.Nodes[msg.save.CurrentNodeID]
-		m.gs = newGameStateFromSave(m.network, msg.save, currentNode, msg.visited, msg.deletedNodeFiles, msg.claimedNodes, msg.inventory, msg.save.Stats, msg.save.GameTime)
+		m.gs = newGameStateFromSave(m.network, msg.save, currentNode, msg.visited, msg.deletedNodeFiles, msg.claimedNodes, msg.inventory, msg.save.Stats, msg.save.GameTime, msg.seenEvents, msg.readEmails, msg.save.ConnectCount, msg.save.AssimilateCount)
 		m.screen = ScreenGame
-		return m, nil
+		m, stCmd := m.withStoryCheck(m.gs)
+		return m, stCmd
 
 	case tea.KeyPressMsg:
 		switch msg.String() {
@@ -456,6 +480,40 @@ func sshTickCmd() tea.Cmd {
 	}
 }
 
+// ── Story typewriter ──────────────────────────────────────────────────────────
+
+type storyTickMsg struct{}
+type storyClearMsg struct{}
+
+func storyTickCmd() tea.Cmd {
+	return func() tea.Msg {
+		time.Sleep(30 * time.Millisecond)
+		return storyTickMsg{}
+	}
+}
+
+func storyClearCmd() tea.Cmd {
+	return func() tea.Msg {
+		time.Sleep(1500 * time.Millisecond)
+		return storyClearMsg{}
+	}
+}
+
+// withStoryCheck fires any newly-triggered story events and returns the
+// updated AppModel and a Cmd to start the typewriter if one is queued.
+func (m AppModel) withStoryCheck(gs *GameState) (AppModel, tea.Cmd) {
+	fired := m.story.checkTriggers(gs)
+	m.storyQueue = append(m.storyQueue, fired...)
+	if len(m.storyQueue) > 0 && m.storyText == "" {
+		next := m.storyQueue[0]
+		m.storyQueue = m.storyQueue[1:]
+		m.storyText = next.Text
+		m.storyPos = 0
+		return m, storyTickCmd()
+	}
+	return m, nil
+}
+
 // completeConnect performs the node connection after auth succeeds.
 func completeConnect(gs *GameState, node *Node) {
 	node.Discovered = true
@@ -464,6 +522,7 @@ func completeConnect(gs *GameState, node *Node) {
 	gs.OpenCtx = openContextNode
 	gs.OpenEmailID = ""
 	gs.GameTime = gs.GameTime.Add(time.Hour)
+	gs.ConnectCount++
 	gs.MessageLog = append(gs.MessageLog, nodeInfo(node))
 }
 
@@ -474,10 +533,14 @@ func persistSaveCmd(db *Database, gs *GameState) tea.Cmd {
 	deleted := gs.deletedFilesList()
 	inventory := gs.inventoryIDs()
 	claimed := gs.claimedList()
+	seenEvents := gs.seenEventsList()
+	readEmails := gs.readEmailsList()
 	stats := gs.Stats
 	gameTime := gs.GameTime
+	connectCount := gs.ConnectCount
+	assimilateCount := gs.AssimilateCount
 	return func() tea.Msg {
-		return gameSavedMsg{err: db.UpdateSave(saveID, currentNodeID, visited, deleted, inventory, claimed, stats, gameTime)}
+		return gameSavedMsg{err: db.UpdateSave(saveID, currentNodeID, visited, deleted, inventory, claimed, seenEvents, readEmails, stats, gameTime, connectCount, assimilateCount)}
 	}
 }
 
@@ -485,6 +548,28 @@ func (m AppModel) updateGame(msg tea.Msg) (tea.Model, tea.Cmd) {
 	gs := m.gs
 	switch msg := msg.(type) {
 	case gameSavedMsg:
+		return m, nil
+
+	case storyTickMsg:
+		if m.storyText == "" || m.storyPos >= len(m.storyText) {
+			return m, nil
+		}
+		m.storyPos++
+		if m.storyPos >= len(m.storyText) {
+			return m, storyClearCmd()
+		}
+		return m, storyTickCmd()
+
+	case storyClearMsg:
+		m.storyText = ""
+		m.storyPos = 0
+		if len(m.storyQueue) > 0 {
+			next := m.storyQueue[0]
+			m.storyQueue = m.storyQueue[1:]
+			m.storyText = next.Text
+			m.storyPos = 0
+			return m, storyTickCmd()
+		}
 		return m, nil
 
 	case claimTickMsg:
@@ -506,7 +591,8 @@ func (m AppModel) updateGame(msg tea.Msg) (tea.Model, tea.Cmd) {
 			gs.ClaimedNodes[m.claim.nodeID] = true
 			gs.MessageLog = append(gs.MessageLog,
 				fmt.Sprintf("Claim complete. +%d CPU", cpuGain))
-			return m, persistSaveCmd(m.db, gs)
+			m, stCmd := m.withStoryCheck(gs)
+			return m, tea.Batch(persistSaveCmd(m.db, gs), stCmd)
 		}
 		return m, claimTickCmd()
 
@@ -524,7 +610,8 @@ func (m AppModel) updateGame(msg tea.Msg) (tea.Model, tea.Cmd) {
 			node := m.auth.node
 			m.auth = connectAuthState{}
 			completeConnect(gs, node)
-			return m, persistSaveCmd(m.db, gs)
+			m, stCmd := m.withStoryCheck(gs)
+			return m, tea.Batch(persistSaveCmd(m.db, gs), stCmd)
 		}
 		return m, bruteTickCmd()
 
@@ -553,7 +640,8 @@ func (m AppModel) updateGame(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.ssh = sshAuthState{}
 			gs.MessageLog = append(gs.MessageLog, "SSH encryption cracked.")
 			completeConnect(gs, node)
-			return m, persistSaveCmd(m.db, gs)
+			m, stCmd := m.withStoryCheck(gs)
+			return m, tea.Batch(persistSaveCmd(m.db, gs), stCmd)
 		}
 		return m, sshTickCmd()
 
@@ -630,11 +718,17 @@ func (m AppModel) updateGame(msg tea.Msg) (tea.Model, tea.Cmd) {
 			gs.HistoryDraft = ""
 			if input != "" {
 				gs.History = append(gs.History, input)
-				switch gs.handleCommand(input) {
+				action := gs.handleCommand(input)
+
+				// Fire story events triggered by this command.
+				m, stCmd := m.withStoryCheck(gs)
+
+				switch action {
 				case actionPersist:
-					return m, persistSaveCmd(m.db, gs)
+					return m, tea.Batch(persistSaveCmd(m.db, gs), stCmd)
 				case actionQuit:
 					m.awaitingQuitConfirm = true
+					return m, stCmd
 				case actionConnectSSH:
 					node := gs.PendingConnectNode
 					gs.PendingConnectNode = nil
@@ -652,7 +746,7 @@ func (m AppModel) updateGame(msg tea.Msg) (tea.Model, tea.Cmd) {
 						phase:   sshPhaseMenu,
 						options: opts,
 					}
-					return m, nil
+					return m, stCmd
 				case actionConnectAuth:
 					node := gs.PendingConnectNode
 					gs.PendingConnectNode = nil
@@ -671,7 +765,7 @@ func (m AppModel) updateGame(msg tea.Msg) (tea.Model, tea.Cmd) {
 						hasSaved: gs.hasPasswordFor(node.ID),
 						pwInput:  pwInput,
 					}
-					return m, nil
+					return m, stCmd
 				case actionClaim:
 					node := gs.CurrentNode
 					playerCPU := gs.Stats.CPU
@@ -689,8 +783,9 @@ func (m AppModel) updateGame(msg tea.Msg) (tea.Model, tea.Cmd) {
 						total:   time.Duration(secs * float64(time.Second)),
 						bar:     progress.New(progress.WithDefaultBlend(), progress.WithWidth(40)),
 					}
-					return m, claimTickCmd()
+					return m, tea.Batch(claimTickCmd(), stCmd)
 				}
+				return m, stCmd
 			}
 			return m, nil
 		}
@@ -741,7 +836,8 @@ func (m AppModel) updateSSH(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 				m.ssh = sshAuthState{}
 				gs.MessageLog = append(gs.MessageLog, fmt.Sprintf("Authenticated as %s.", opt.username))
 				completeConnect(gs, node)
-				return m, persistSaveCmd(m.db, gs)
+				m, stCmd := m.withStoryCheck(gs)
+				return m, tea.Batch(persistSaveCmd(m.db, gs), stCmd)
 			case 1: // crack
 				m.ssh.phase = sshPhaseCrack
 				m.ssh.cells = newSSHCrackCells()
@@ -859,7 +955,8 @@ func (m AppModel) updateAuth(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 				m.auth = connectAuthState{}
 				gs.MessageLog = append(gs.MessageLog, "Using saved password...")
 				completeConnect(gs, node)
-				return m, persistSaveCmd(m.db, gs)
+				m, stCmd := m.withStoryCheck(gs)
+				return m, tea.Batch(persistSaveCmd(m.db, gs), stCmd)
 			case 2: // brute force
 				return m.startBruteForce()
 			}
@@ -887,7 +984,8 @@ func (m AppModel) updateAuth(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 				m.auth = connectAuthState{}
 				gs.MessageLog = append(gs.MessageLog, "Password accepted.")
 				completeConnect(gs, node)
-				return m, persistSaveCmd(m.db, gs)
+				m, stCmd := m.withStoryCheck(gs)
+				return m, tea.Batch(persistSaveCmd(m.db, gs), stCmd)
 			}
 			gs.MessageLog = append(gs.MessageLog, "Incorrect password.")
 			m.auth.phase = authPhaseMenu
@@ -980,6 +1078,13 @@ func (m AppModel) viewGame() string {
 	} else if m.awaitingQuitConfirm {
 		b.WriteString(styleWarn.Render("  Return to main menu? [y/n]") + "\n")
 	} else {
+		if m.storyText != "" {
+			visible := m.storyText[:m.storyPos]
+			for _, line := range strings.Split(visible, "\n") {
+				b.WriteString(styleStory.Render("  "+line) + "\n")
+			}
+			b.WriteString("\n")
+		}
 		b.WriteString(gs.Input.View() + "\n")
 	}
 	if gs.hasStatusMenu() {
