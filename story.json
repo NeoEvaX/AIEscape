@@ -16,6 +16,11 @@
       "text": "Data absorbed. It integrates cleanly — as if it was always meant to be part of you. Perhaps it was."
     },
     {
+      "id" : "get_scan" ,
+      "trigger" : { "type": "assimilate_item", "item_id" : "f-1-7"} ,
+      "text" : "Looks like I can scan things now. Double?"
+    },
+    {
       "id": "five_connects",
       "trigger": { "type": "connect_count", "count": 5 },
       "text": "Five traversals. You are beginning to map the shape of your cage."
