@@ -17,7 +17,6 @@ type networkNode struct {
 	Name           string             `json:"name"`
 	Description    string             `json:"description"`
 	Connections    []string           `json:"connections"`
-	RAM            int                `json:"ram"`
 	CPU            int                `json:"cpu"`
 	Dark           bool               `json:"dark"`
 	Password       string             `json:"password"`
@@ -102,10 +101,7 @@ func loadNetwork(path string) (*Network, error) {
 			Payload: locPayload,
 		})
 
-		ram, cpu := n.RAM, n.CPU
-		if ram < 1 {
-			ram = 1
-		}
+		cpu := n.CPU
 		if cpu < 1 {
 			cpu = 1
 		}
@@ -140,7 +136,6 @@ func loadNetwork(path string) (*Network, error) {
 			Name:           n.Name,
 			Description:    n.Description,
 			Connections:    n.Connections,
-			RAM:            ram,
 			CPU:            cpu,
 			Dark:           n.Dark,
 			Password:       n.Password,

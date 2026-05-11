@@ -83,7 +83,6 @@ func (d *Database) migrate() error {
 
 	// Additive migrations — ignored if the column already exists.
 	for _, s := range []string{
-		`ALTER TABLE saves ADD COLUMN ram         INTEGER NOT NULL DEFAULT 1`,
 		`ALTER TABLE saves ADD COLUMN cpu         INTEGER NOT NULL DEFAULT 1`,
 		`ALTER TABLE saves ADD COLUMN claim_skill INTEGER NOT NULL DEFAULT 1`,
 		`ALTER TABLE saves ADD COLUMN game_time   INTEGER NOT NULL DEFAULT 0`,
@@ -245,8 +244,8 @@ func (d *Database) LoadSave(id int64) (*Save, []string, error) {
 	var s Save
 	var gameTimeUnix int64
 	err := d.conn.QueryRow(
-		`SELECT id, name, current_node_id, updated_at, ram, cpu, claim_skill, game_time FROM saves WHERE id = ?`, id,
-	).Scan(&s.ID, &s.Name, &s.CurrentNodeID, &s.UpdatedAt, &s.Stats.RAM, &s.Stats.CPU, &s.Stats.ClaimSkill, &gameTimeUnix)
+		`SELECT id, name, current_node_id, updated_at, cpu, claim_skill, game_time FROM saves WHERE id = ?`, id,
+	).Scan(&s.ID, &s.Name, &s.CurrentNodeID, &s.UpdatedAt, &s.Stats.CPU, &s.Stats.ClaimSkill, &gameTimeUnix)
 	if gameTimeUnix == 0 {
 		s.GameTime = gameStartTime
 	} else {
@@ -282,8 +281,8 @@ func (d *Database) UpdateSave(saveID int64, currentNodeID string, visited, delet
 	defer tx.Rollback()
 
 	if _, err := tx.Exec(
-		`UPDATE saves SET current_node_id = ?, updated_at = ?, ram = ?, cpu = ?, claim_skill = ?, game_time = ? WHERE id = ?`,
-		currentNodeID, time.Now(), stats.RAM, stats.CPU, stats.ClaimSkill, gameTime.Unix(), saveID,
+		`UPDATE saves SET current_node_id = ?, updated_at = ?, cpu = ?, claim_skill = ?, game_time = ? WHERE id = ?`,
+		currentNodeID, time.Now(), stats.CPU, stats.ClaimSkill, gameTime.Unix(), saveID,
 	); err != nil {
 		return err
 	}

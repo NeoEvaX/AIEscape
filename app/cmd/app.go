@@ -77,7 +77,7 @@ func newSSHCrackCells() [sshGridSize]rune {
 }
 
 func sshCrackDuration(gs *GameState, node *Node) time.Duration {
-	combined := float64(node.CPU+node.RAM) / float64(gs.Stats.CPU+gs.Stats.RAM)
+	combined := float64(node.CPU) / float64(gs.Stats.CPU)
 	secs := combined * 20.0
 	if secs < 3.0 {
 		secs = 3.0
@@ -501,13 +501,11 @@ func (m AppModel) updateGame(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.claim.active = false
 			node := gs.Network.Nodes[m.claim.nodeID]
 			claimSkill := gs.Stats.ClaimSkill
-			ramGain := max(1, int(float64(node.RAM)*float64(claimSkill)/100.0))
 			cpuGain := max(1, int(float64(node.CPU)*float64(claimSkill)/100.0))
-			gs.Stats.RAM += ramGain
 			gs.Stats.CPU += cpuGain
 			gs.ClaimedNodes[m.claim.nodeID] = true
 			gs.MessageLog = append(gs.MessageLog,
-				fmt.Sprintf("Claim complete. +%d RAM  +%d CPU", ramGain, cpuGain))
+				fmt.Sprintf("Claim complete. +%d CPU", cpuGain))
 			return m, persistSaveCmd(m.db, gs)
 		}
 		return m, claimTickCmd()
@@ -957,7 +955,7 @@ func (m AppModel) viewAuth() string {
 }
 
 func bruteEst(gs *GameState, node *Node) float64 {
-	combined := float64(node.CPU+node.RAM) / float64(gs.Stats.CPU+gs.Stats.RAM)
+	combined := float64(node.CPU) / float64(gs.Stats.CPU)
 	secs := combined * 15.0
 	if secs < 2.0 {
 		secs = 2.0

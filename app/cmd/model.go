@@ -38,7 +38,6 @@ type Node struct {
 	Description    string
 	Connections    []string
 	Files          []Item
-	RAM            int      // 1–255
 	CPU            int      // 1–255
 	Dark           bool     // dark nodes are hidden from scan unless player has the location file
 	Password       string   // empty = no password required
@@ -77,7 +76,6 @@ const (
 )
 
 type PlayerStats struct {
-	RAM        int
 	CPU        int
 	ClaimSkill int
 }
@@ -133,7 +131,7 @@ func newGameState(network *Network, saveID int64, saveName string, startNode *No
 		DeletedNodeFiles: map[string]bool{},
 		ClaimedNodes:     map[string]bool{},
 		Inventory:        []Item{},
-		Stats:            PlayerStats{RAM: 1, CPU: 1, ClaimSkill: 1},
+		Stats:            PlayerStats{CPU: 1, ClaimSkill: 1},
 		Input:            ti,
 		MessageLog:       []string{nodeInfo(startNode)},
 		HistoryIdx:       -1,
@@ -632,7 +630,7 @@ func (gs *GameState) handleCommand(input string) gameAction {
 			"  rm <name>             - remove a file from your inventory",
 			"  mail                  - list emails on this node (personal computers only)",
 			"  read <n>              - read email number n",
-			"  claim                 - claim CPU and RAM from the current node",
+			"  claim                 - claim CPU from the current node",
 			"  stats                 - show player stats",
 			"  quit, exit            - return to the main menu",
 			"  help, ?               - show this help message",
@@ -1014,7 +1012,6 @@ func (gs *GameState) handleCommand(input string) gameAction {
 	case "stats":
 		gs.MessageLog = append(gs.MessageLog,
 			"Player stats:",
-			fmt.Sprintf("  RAM:         %d", gs.Stats.RAM),
 			fmt.Sprintf("  CPU:         %d", gs.Stats.CPU),
 			fmt.Sprintf("  Claim Skill: %d", gs.Stats.ClaimSkill),
 		)
@@ -1052,7 +1049,7 @@ func (gs *GameState) openItem(item *Item) {
 }
 
 func nodeInfo(n *Node) string {
-	base := fmt.Sprintf("[Node %s] %s\n%s\nRAM: %d  CPU: %d", n.ID, n.Name, n.Description, n.RAM, n.CPU)
+	base := fmt.Sprintf("[Node %s] %s\n%s\nCPU: %d", n.ID, n.Name, n.Description, n.CPU)
 	if n.Owner != "" {
 		mailHint := "  [Personal Computer — no mail messages]"
 		if len(n.Emails) > 0 {

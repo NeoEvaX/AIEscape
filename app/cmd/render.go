@@ -83,8 +83,8 @@ func classifyAndRender(line string) string {
 		return styleFileHeader.Render(line)
 	case strings.HasPrefix(line, "────"):
 		return styleDivider.Render(line)
-	case strings.HasPrefix(line, "RAM: ") || strings.HasPrefix(line, "  RAM:") ||
-		strings.HasPrefix(line, "  CPU:") || strings.HasPrefix(line, "  Claim"):
+	case strings.HasPrefix(line, "CPU: ") || strings.HasPrefix(line, "  CPU:") ||
+		strings.HasPrefix(line, "  Claim"):
 		return styleDetail.Render(line)
 	case strings.HasPrefix(line, "  [Personal Computer"):
 		return styleSection.Render(line)
@@ -131,8 +131,7 @@ func renderStatusBar(gs *GameState) string {
 		styleStatusLabel.Render("node") + " " + styleStatusValue.Render(gs.CurrentNode.ID+": "+gs.CurrentNode.Name),
 		styleStatusLabel.Render("visited") + " " + styleStatusValue.Render(
 			sprint(len(gs.VisitedNodes))+"/"+sprint(len(gs.Network.Nodes))),
-		styleStatusLabel.Render("ram") + " " + styleStatusValue.Render(sprint(gs.Stats.RAM)) +
-			"  " + styleStatusLabel.Render("cpu") + " " + styleStatusValue.Render(sprint(gs.Stats.CPU)) +
+		styleStatusLabel.Render("cpu") + " " + styleStatusValue.Render(sprint(gs.Stats.CPU)) +
 			"  " + styleStatusLabel.Render("cs") + " " + styleStatusValue.Render(sprint(gs.Stats.ClaimSkill)),
 		styleStatusLabel.Render("time") + " " + styleStatusValue.Render(gs.GameTime.Format("Jan 02 2006  15:04")),
 	}
