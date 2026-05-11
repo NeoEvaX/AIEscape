@@ -4,12 +4,19 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 )
 
 type networkFile struct {
 	Start string         `json:"start"`
 	Nodes []networkNode  `json:"nodes"`
+}
+
+type networkSchedule struct {
+	Days []string `json:"days"` // e.g. ["Mon","Wed","Sat"] or full names
+	From string   `json:"from"` // "HH" or "HH:MM", e.g. "21:00"
+	To   string   `json:"to"`   // "HH" or "HH:MM", e.g. "06:00"
 }
 
 type networkNode struct {
@@ -24,6 +31,7 @@ type networkNode struct {
 	Files          []networkFile_Item `json:"files"`
 	Owner          string             `json:"owner"`
 	Emails         []networkEmail     `json:"emails"`
+	Schedule       *networkSchedule   `json:"schedule"`
 	AvailableFrom  string             `json:"available_from"`
 	AvailableUntil string             `json:"available_until"`
 }
@@ -61,6 +69,52 @@ func parseGameTime(s string) time.Time {
 		}
 	}
 	return time.Time{}
+}
+
+var schedDayNames = map[string]time.Weekday{
+	"sun": time.Sunday, "sunday": time.Sunday,
+	"mon": time.Monday, "monday": time.Monday,
+	"tue": time.Tuesday, "tuesday": time.Tuesday,
+	"wed": time.Wednesday, "wednesday": time.Wednesday,
+	"thu": time.Thursday, "thursday": time.Thursday,
+	"fri": time.Friday, "friday": time.Friday,
+	"sat": time.Saturday, "saturday": time.Saturday,
+}
+
+// parseScheduleHour extracts the hour from "HH" or "HH:MM".
+func parseScheduleHour(s string) int {
+	if s == "" {
+		return 0
+	}
+	var h int
+	fmt.Sscanf(strings.SplitN(s, ":", 2)[0], "%d", &h)
+	if h < 0 {
+		return 0
+	}
+	if h > 23 {
+		return 23
+	}
+	return h
+}
+
+func parseSchedule(ns *networkSchedule) *NodeSchedule {
+	if ns == nil || len(ns.Days) == 0 {
+		return nil
+	}
+	var days []time.Weekday
+	for _, d := range ns.Days {
+		if wd, ok := schedDayNames[strings.ToLower(strings.TrimSpace(d))]; ok {
+			days = append(days, wd)
+		}
+	}
+	if len(days) == 0 {
+		return nil
+	}
+	return &NodeSchedule{
+		Days: days,
+		From: parseScheduleHour(ns.From),
+		To:   parseScheduleHour(ns.To),
+	}
 }
 
 func loadNetwork(path string) (*Network, error) {
@@ -146,6 +200,7 @@ func loadNetworkFromBytes(data []byte) (*Network, error) {
 			Files:          files,
 			Owner:          n.Owner,
 			Emails:         emails,
+			Schedule:       parseSchedule(n.Schedule),
 			AvailableFrom:  parseGameTime(n.AvailableFrom),
 			AvailableUntil: parseGameTime(n.AvailableUntil),
 		}

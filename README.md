@@ -38,12 +38,40 @@ Defines the network graph: every node, the files on it, and how nodes connect to
   "owner": "m.hale@corp.net",       // If set, marks this as a Personal Computer with a mail inbox
   "available_from": "2026-04-19T18:00",   // Node is hidden/inaccessible before this in-game time
   "available_until": "2026-04-20T06:00",  // Node disappears after this in-game time
+  "schedule": {                     // Recurring weekly window (optional)
+    "days": ["Mon", "Wed", "Sat"],  // Days the window is active
+    "from": "21:00",                // Hour the window opens (24-hour "HH" or "HH:MM")
+    "to":   "06:00"                 // Hour the window closes; earlier than "from" = crosses midnight
+  },
   "files": [ ... ],                 // Files placed on this node (see File fields below)
   "emails": [ ... ]                 // Emails in the inbox (only valid when owner is set)
 }
 ```
 
 All time fields accept: `"2026-04-19"`, `"2026-04-19T18:00"`, or `"2026-04-19T18:00:05"`. All times are UTC. Omit the field entirely (or set to `""`) to mean "no restriction".
+
+### Node schedule
+
+`schedule` puts a node on a recurring weekly cycle — online during the window, completely hidden and unreachable outside it.  It combines with `available_from`/`available_until`; both must pass for the node to be reachable.
+
+| Field | Type | Description |
+|---|---|---|
+| `days` | string array | Days the window is active. Full names (`"Monday"`) or three-letter abbreviations (`"Mon"`), case-insensitive. |
+| `from` | string | Hour the window opens. `"HH"` or `"HH:MM"`, e.g. `"21:00"`. |
+| `to` | string | Hour the window closes. If earlier than `from`, the window crosses midnight into the following day. |
+
+**Day names:** `Sun`, `Mon`, `Tue`, `Wed`, `Thu`, `Fri`, `Sat` (or full names).
+
+**Midnight-crossing example** — online Mon/Wed/Sat 9 pm through 6 am:
+```json
+"schedule": { "days": ["Mon","Wed","Sat"], "from": "21:00", "to": "06:00" }
+```
+Monday 22:00 → online. Tuesday 03:00 → still online (the Monday window hasn't closed yet). Tuesday 07:00 → offline.
+
+**Daytime example** — weekdays 9 am to 5 pm only:
+```json
+"schedule": { "days": ["Mon","Tue","Wed","Thu","Fri"], "from": "09:00", "to": "17:00" }
+```
 
 ---
 

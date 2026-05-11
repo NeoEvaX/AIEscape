@@ -31,6 +31,45 @@ func (e *Email) IsAvailable(gameTime time.Time) bool {
 	return isAvailableAt(e.AvailableFrom, e.AvailableUntil, gameTime)
 }
 
+// NodeSchedule defines a recurring weekly availability window.
+// If To <= From the window crosses midnight (e.g. From=21 To=6 means 9 pm – 6 am).
+type NodeSchedule struct {
+	Days []time.Weekday
+	From int // hour 0–23 the window opens
+	To   int // hour 0–23 the window closes
+}
+
+// IsActive returns true if t falls within any scheduled window.
+func (s *NodeSchedule) IsActive(t time.Time) bool {
+	hour := t.Hour()
+	wd := t.Weekday()
+
+	if s.To <= s.From {
+		// Window crosses midnight (e.g. 21:00 → 06:00).
+		// Active if: hour >= From on a scheduled day
+		//         OR hour < To on the day after a scheduled day.
+		if hour >= s.From {
+			return schedDayMatch(s.Days, wd)
+		}
+		if hour < s.To {
+			prev := time.Weekday((int(wd) + 6) % 7)
+			return schedDayMatch(s.Days, prev)
+		}
+		return false
+	}
+	// Normal window (e.g. 09:00 → 17:00).
+	return hour >= s.From && hour < s.To && schedDayMatch(s.Days, wd)
+}
+
+func schedDayMatch(days []time.Weekday, d time.Weekday) bool {
+	for _, day := range days {
+		if day == d {
+			return true
+		}
+	}
+	return false
+}
+
 type Node struct {
 	ID             string
 	Name           string
@@ -43,13 +82,20 @@ type Node struct {
 	SSHUsers       []string // non-empty = SSH auth required; lists allowed usernames
 	Owner          string   // non-empty = personal computer; owner's email address
 	Emails         []Email  // mail stored on this PC node
+	Schedule       *NodeSchedule
 	AvailableFrom  time.Time
 	AvailableUntil time.Time
 	Discovered     bool
 }
 
 func (n *Node) IsAvailable(gameTime time.Time) bool {
-	return isAvailableAt(n.AvailableFrom, n.AvailableUntil, gameTime)
+	if !isAvailableAt(n.AvailableFrom, n.AvailableUntil, gameTime) {
+		return false
+	}
+	if n.Schedule != nil && !n.Schedule.IsActive(gameTime) {
+		return false
+	}
+	return true
 }
 
 type Network struct {
