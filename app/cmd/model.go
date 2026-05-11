@@ -496,9 +496,42 @@ func (gs *GameState) findEmailAttachment(query string) *Item {
 	return nil
 }
 
+// tabCompleteCommand completes a bare command name prefix (no space in input yet).
+// Appends a trailing space so the cursor is ready for arguments.
+func (gs *GameState) tabCompleteCommand(prefix string) (string, bool) {
+	if prefix == "" {
+		return prefix, false
+	}
+	commands := []string{
+		"connect", "ls", "list", "assimilate", "delete",
+		"inventory", "inv", "locs", "passwords", "keys",
+		"open", "rm", "mail", "read", "claim", "stats",
+		"quit", "exit", "help",
+	}
+	if gs.canScan() {
+		commands = append([]string{"scan"}, commands...)
+	}
+	lower := strings.ToLower(prefix)
+	var matches []string
+	for _, cmd := range commands {
+		if strings.HasPrefix(cmd, lower) {
+			matches = append(matches, cmd)
+		}
+	}
+	if len(matches) == 1 {
+		return matches[0] + " ", true
+	}
+	return prefix, false
+}
+
 // tabComplete attempts to complete the current input.
 // Returns the completed string and true if a unique match was found.
 func (gs *GameState) tabComplete(input string) (string, bool) {
+	// No space yet — complete the command name.
+	if !strings.Contains(input, " ") {
+		return gs.tabCompleteCommand(input)
+	}
+
 	type rule struct {
 		prefix     string
 		sourceFunc func() []string
