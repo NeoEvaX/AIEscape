@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"charm.land/bubbles/v2/textinput"
-	"charm.land/bubbles/v2/viewport"
 	"charm.land/lipgloss/v2"
 )
 
@@ -92,7 +91,6 @@ type GameState struct {
 	Stats            PlayerStats
 	OpenCtx          openContext // determines what 'open' targets
 	Input            textinput.Model
-	Viewport         viewport.Model
 	MessageLog       []string
 
 	// Command history (not persisted)
@@ -702,6 +700,7 @@ func (gs *GameState) handleCommand(input string) gameAction {
 			"  read <n>              - read email number n",
 			"  claim                 - claim CPU from the current node",
 			"  stats                 - show player stats",
+			"  lore                  - review all received transmissions",
 			"  quit, exit            - return to the main menu",
 			"  help, ?               - show this help message",
 		)

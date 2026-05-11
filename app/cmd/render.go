@@ -31,6 +31,8 @@ var (
 	styleStory = lipgloss.NewStyle().Foreground(lipgloss.Color("#818CF8")).Italic(true)
 )
 
+const storyLinePrefix = "  ◈  "
+
 var divider = "  " + strings.Repeat("─", 60)
 
 // ── Line classification ───────────────────────────────────────────────────────
@@ -77,6 +79,8 @@ func isSuccessLine(line string) bool {
 
 func classifyAndRender(line string) string {
 	switch {
+	case strings.HasPrefix(line, storyLinePrefix):
+		return styleStory.Render(line)
 	case strings.HasPrefix(line, "> "):
 		return styleCmd.Render(line)
 	case strings.HasPrefix(line, "[Node "):

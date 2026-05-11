@@ -134,23 +134,35 @@ type AppModel struct {
 	ssh                 sshAuthState
 
 	// Story typewriter
-	storyQueue []StoryEvent
-	storyText  string
-	storyPos   int
+	storyQueue  []StoryEvent
+	storyText   string
+	storyPos    int
+	storyLogIdx int // index into gs.MessageLog of the active typewriter slot; -1 = none
+
+	// Scrollable log
+	logScroll int // lines scrolled up from the bottom; 0 = pinned to bottom
+	winW      int
+	winH      int
 }
 
 func NewAppModel(db *Database, network *Network, story *StoryCollection) AppModel {
 	return AppModel{
-		screen:  ScreenMainMenu,
-		db:      db,
-		network: network,
-		story:   story,
+		screen:      ScreenMainMenu,
+		db:          db,
+		network:     network,
+		story:       story,
+		storyLogIdx: -1,
 	}
 }
 
 func (m AppModel) Init() tea.Cmd { return nil }
 
 func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if wsm, ok := msg.(tea.WindowSizeMsg); ok {
+		m.winW = wsm.Width
+		m.winH = wsm.Height
+		return m, nil
+	}
 	switch m.screen {
 	case ScreenMainMenu:
 		return m.updateMainMenu(msg)
@@ -258,6 +270,7 @@ func (m AppModel) updateNewGame(msg tea.Msg) (tea.Model, tea.Cmd) {
 		startNode := m.network.Nodes[m.network.StartNodeID]
 		m.gs = newGameState(m.network, msg.id, strings.TrimSpace(m.nameInput.Value()), startNode)
 		m.screen = ScreenGame
+		m.logScroll = 0
 		m, stCmd := m.withStoryCheck(m.gs)
 		return m, stCmd
 
@@ -390,6 +403,7 @@ func (m AppModel) updateLoadSave(msg tea.Msg) (tea.Model, tea.Cmd) {
 		currentNode := m.network.Nodes[msg.save.CurrentNodeID]
 		m.gs = newGameStateFromSave(m.network, msg.save, currentNode, msg.visited, msg.deletedNodeFiles, msg.claimedNodes, msg.inventory, msg.save.Stats, msg.save.GameTime, msg.seenEvents, msg.readEmails, msg.save.ConnectCount, msg.save.AssimilateCount)
 		m.screen = ScreenGame
+		m.logScroll = 0
 		m, stCmd := m.withStoryCheck(m.gs)
 		return m, stCmd
 
@@ -483,7 +497,6 @@ func sshTickCmd() tea.Cmd {
 // ── Story typewriter ──────────────────────────────────────────────────────────
 
 type storyTickMsg struct{}
-type storyClearMsg struct{}
 
 func storyTickCmd() tea.Cmd {
 	return func() tea.Msg {
@@ -492,11 +505,18 @@ func storyTickCmd() tea.Cmd {
 	}
 }
 
-func storyClearCmd() tea.Cmd {
-	return func() tea.Msg {
-		time.Sleep(1500 * time.Millisecond)
-		return storyClearMsg{}
+// storyLogEntry formats story text for display in the message log.
+// Each line is prefixed with the story sigil so classifyAndRender styles it.
+func storyLogEntry(text string) string {
+	if text == "" {
+		return storyLinePrefix
 	}
+	lines := strings.Split(text, "\n")
+	prefixed := make([]string, len(lines))
+	for i, l := range lines {
+		prefixed[i] = storyLinePrefix + l
+	}
+	return strings.Join(prefixed, "\n")
 }
 
 // withStoryCheck fires any newly-triggered story events and returns the
@@ -504,11 +524,13 @@ func storyClearCmd() tea.Cmd {
 func (m AppModel) withStoryCheck(gs *GameState) (AppModel, tea.Cmd) {
 	fired := m.story.checkTriggers(gs)
 	m.storyQueue = append(m.storyQueue, fired...)
-	if len(m.storyQueue) > 0 && m.storyText == "" {
+	if len(m.storyQueue) > 0 && m.storyLogIdx == -1 {
 		next := m.storyQueue[0]
 		m.storyQueue = m.storyQueue[1:]
 		m.storyText = next.Text
 		m.storyPos = 0
+		gs.MessageLog = append(gs.MessageLog, storyLogEntry(""))
+		m.storyLogIdx = len(gs.MessageLog) - 1
 		return m, storyTickCmd()
 	}
 	return m, nil
@@ -551,16 +573,16 @@ func (m AppModel) updateGame(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case storyTickMsg:
-		if m.storyText == "" || m.storyPos >= len(m.storyText) {
+		if m.storyText == "" || m.storyLogIdx == -1 {
 			return m, nil
 		}
-		m.storyPos++
-		if m.storyPos >= len(m.storyText) {
-			return m, storyClearCmd()
+		if m.storyPos < len(m.storyText) {
+			m.storyPos++
+			gs.MessageLog[m.storyLogIdx] = storyLogEntry(m.storyText[:m.storyPos])
+			return m, storyTickCmd()
 		}
-		return m, storyTickCmd()
-
-	case storyClearMsg:
+		// Typing complete — mark done and advance to next queued event.
+		m.storyLogIdx = -1
 		m.storyText = ""
 		m.storyPos = 0
 		if len(m.storyQueue) > 0 {
@@ -568,6 +590,8 @@ func (m AppModel) updateGame(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.storyQueue = m.storyQueue[1:]
 			m.storyText = next.Text
 			m.storyPos = 0
+			gs.MessageLog = append(gs.MessageLog, storyLogEntry(""))
+			m.storyLogIdx = len(gs.MessageLog) - 1
 			return m, storyTickCmd()
 		}
 		return m, nil
@@ -679,6 +703,23 @@ func (m AppModel) updateGame(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg.String() {
 		case "ctrl+c":
 			return m, tea.Quit
+		case "pgup":
+			pageSize := m.logVisibleLines() / 2
+			if pageSize < 5 {
+				pageSize = 5
+			}
+			m.logScroll += pageSize
+			return m, nil
+		case "pgdown":
+			pageSize := m.logVisibleLines() / 2
+			if pageSize < 5 {
+				pageSize = 5
+			}
+			m.logScroll -= pageSize
+			if m.logScroll < 0 {
+				m.logScroll = 0
+			}
+			return m, nil
 		case "up":
 			if len(gs.History) == 0 {
 				return m, nil
@@ -716,8 +757,49 @@ func (m AppModel) updateGame(msg tea.Msg) (tea.Model, tea.Cmd) {
 			gs.Input.SetValue("")
 			gs.HistoryIdx = -1
 			gs.HistoryDraft = ""
+
+			// If a story event is still typing, skip it to completion on Enter.
+			if m.storyLogIdx != -1 && m.storyPos < len(m.storyText) {
+				m.storyPos = len(m.storyText)
+				gs.MessageLog[m.storyLogIdx] = storyLogEntry(m.storyText)
+				m.storyLogIdx = -1
+				m.storyText = ""
+				if len(m.storyQueue) > 0 {
+					next := m.storyQueue[0]
+					m.storyQueue = m.storyQueue[1:]
+					m.storyText = next.Text
+					m.storyPos = 0
+					gs.MessageLog = append(gs.MessageLog, storyLogEntry(""))
+					m.storyLogIdx = len(gs.MessageLog) - 1
+				}
+			}
+
 			if input != "" {
+				m.logScroll = 0 // snap back to bottom on any command
 				gs.History = append(gs.History, input)
+
+				// Intercept the lore command here since it needs access to m.story.
+				if input == "lore" {
+					gs.MessageLog = append(gs.MessageLog, "> lore")
+					var seen []StoryEvent
+					for _, event := range m.story.Events {
+						if gs.SeenEvents[event.ID] {
+							seen = append(seen, event)
+						}
+					}
+					if len(seen) == 0 {
+						gs.MessageLog = append(gs.MessageLog, "No transmissions on record.")
+					} else {
+						gs.MessageLog = append(gs.MessageLog,
+							fmt.Sprintf("Transmission log — %d entries:", len(seen)))
+						for i, event := range seen {
+							gs.MessageLog = append(gs.MessageLog,
+								fmt.Sprintf("  [%02d]  %s", i+1, event.Text))
+						}
+					}
+					return m, nil
+				}
+
 				action := gs.handleCommand(input)
 
 				// Fire story events triggered by this command.
@@ -1061,10 +1143,50 @@ func bruteEst(gs *GameState, node *Node) float64 {
 	return secs
 }
 
+// logVisibleLines returns how many lines the log area can display.
+func (m AppModel) logVisibleLines() int {
+	h := m.winH
+	if h <= 0 {
+		h = 30 // safe fallback before WindowSizeMsg arrives
+	}
+	lines := h - 4 // reserve: 1 input + 1 blank + 2 status bar
+	if lines < 5 {
+		lines = 5
+	}
+	return lines
+}
+
 func (m AppModel) viewGame() string {
 	gs := m.gs
 	var b strings.Builder
-	b.WriteString(renderLog(gs.MessageLog))
+
+	// Render the scrollable log.
+	visH := m.logVisibleLines()
+	rendered := renderLog(gs.MessageLog)
+	allLines := strings.Split(rendered, "\n")
+	// Drop trailing blank produced by the final "\n" in renderLog.
+	if len(allLines) > 0 && allLines[len(allLines)-1] == "" {
+		allLines = allLines[:len(allLines)-1]
+	}
+	total := len(allLines)
+	// scroll offset: 0 = pinned to bottom; higher = further up.
+	scroll := m.logScroll
+	if scroll > total-visH {
+		scroll = total - visH
+	}
+	if scroll < 0 {
+		scroll = 0
+	}
+	startLine := total - visH - scroll
+	if startLine < 0 {
+		startLine = 0
+	}
+	endLine := startLine + visH
+	if endLine > total {
+		endLine = total
+	}
+	b.WriteString(strings.Join(allLines[startLine:endLine], "\n"))
+	b.WriteByte('\n')
 	b.WriteByte('\n')
 	if m.ssh.active {
 		b.WriteString(m.viewSSH())
@@ -1078,13 +1200,6 @@ func (m AppModel) viewGame() string {
 	} else if m.awaitingQuitConfirm {
 		b.WriteString(styleWarn.Render("  Return to main menu? [y/n]") + "\n")
 	} else {
-		if m.storyText != "" {
-			visible := m.storyText[:m.storyPos]
-			for _, line := range strings.Split(visible, "\n") {
-				b.WriteString(styleStory.Render("  "+line) + "\n")
-			}
-			b.WriteString("\n")
-		}
 		b.WriteString(gs.Input.View() + "\n")
 	}
 	if gs.hasStatusMenu() {

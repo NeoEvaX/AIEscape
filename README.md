@@ -206,7 +206,7 @@ Defines narrative events that type out above the command prompt when triggered. 
 }
 ```
 
-`text` supports newlines (`\n`). The text types out at ~30ms per character, lingers for 1.5 seconds, then clears automatically.
+`text` supports newlines (`\n`). The text types out at ~30ms per character
 
 ---
 
