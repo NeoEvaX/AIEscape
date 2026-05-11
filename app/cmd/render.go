@@ -134,6 +134,7 @@ func renderStatusBar(gs *GameState) string {
 		styleStatusLabel.Render("ram") + " " + styleStatusValue.Render(sprint(gs.Stats.RAM)) +
 			"  " + styleStatusLabel.Render("cpu") + " " + styleStatusValue.Render(sprint(gs.Stats.CPU)) +
 			"  " + styleStatusLabel.Render("cs") + " " + styleStatusValue.Render(sprint(gs.Stats.ClaimSkill)),
+		styleStatusLabel.Render("time") + " " + styleStatusValue.Render(gs.GameTime.Format("Jan 02 2006  15:04")),
 	}
 	bar := "  " + strings.Join(parts, sep)
 	rule := styleDivider.Render("  " + strings.Repeat("─", 70))

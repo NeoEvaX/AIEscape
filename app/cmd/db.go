@@ -14,6 +14,7 @@ type Save struct {
 	CurrentNodeID string
 	VisitedCount  int
 	UpdatedAt     time.Time
+	GameTime      time.Time
 	Stats         PlayerStats
 }
 
@@ -85,6 +86,7 @@ func (d *Database) migrate() error {
 		`ALTER TABLE saves ADD COLUMN ram         INTEGER NOT NULL DEFAULT 1`,
 		`ALTER TABLE saves ADD COLUMN cpu         INTEGER NOT NULL DEFAULT 1`,
 		`ALTER TABLE saves ADD COLUMN claim_skill INTEGER NOT NULL DEFAULT 1`,
+		`ALTER TABLE saves ADD COLUMN game_time   INTEGER NOT NULL DEFAULT 0`,
 	} {
 		d.conn.Exec(s) // intentionally ignore "duplicate column" errors
 	}
@@ -214,7 +216,7 @@ func (d *Database) ListSaves() ([]Save, error) {
 	return saves, rows.Err()
 }
 
-func (d *Database) CreateSave(name, currentNodeID string, visitedNodeIDs []string) (int64, error) {
+func (d *Database) CreateSave(name, currentNodeID string, visitedNodeIDs []string, gameTime time.Time) (int64, error) {
 	tx, err := d.conn.Begin()
 	if err != nil {
 		return 0, err
@@ -222,8 +224,8 @@ func (d *Database) CreateSave(name, currentNodeID string, visitedNodeIDs []strin
 	defer tx.Rollback()
 
 	res, err := tx.Exec(
-		`INSERT INTO saves (name, current_node_id, updated_at) VALUES (?, ?, ?)`,
-		name, currentNodeID, time.Now(),
+		`INSERT INTO saves (name, current_node_id, updated_at, game_time) VALUES (?, ?, ?, ?)`,
+		name, currentNodeID, time.Now(), gameTime.Unix(),
 	)
 	if err != nil {
 		return 0, fmt.Errorf("creating save %q: %w", name, err)
@@ -241,9 +243,15 @@ func (d *Database) CreateSave(name, currentNodeID string, visitedNodeIDs []strin
 
 func (d *Database) LoadSave(id int64) (*Save, []string, error) {
 	var s Save
+	var gameTimeUnix int64
 	err := d.conn.QueryRow(
-		`SELECT id, name, current_node_id, updated_at, ram, cpu, claim_skill FROM saves WHERE id = ?`, id,
-	).Scan(&s.ID, &s.Name, &s.CurrentNodeID, &s.UpdatedAt, &s.Stats.RAM, &s.Stats.CPU, &s.Stats.ClaimSkill)
+		`SELECT id, name, current_node_id, updated_at, ram, cpu, claim_skill, game_time FROM saves WHERE id = ?`, id,
+	).Scan(&s.ID, &s.Name, &s.CurrentNodeID, &s.UpdatedAt, &s.Stats.RAM, &s.Stats.CPU, &s.Stats.ClaimSkill, &gameTimeUnix)
+	if gameTimeUnix == 0 {
+		s.GameTime = gameStartTime
+	} else {
+		s.GameTime = time.Unix(gameTimeUnix, 0).UTC()
+	}
 	if err != nil {
 		return nil, nil, fmt.Errorf("loading save: %w", err)
 	}
@@ -266,7 +274,7 @@ func (d *Database) LoadSave(id int64) (*Save, []string, error) {
 }
 
 // UpdateSave persists all mutable save state in a single transaction.
-func (d *Database) UpdateSave(saveID int64, currentNodeID string, visited, deletedNodeFiles, inventoryIDs, claimedNodes []string, stats PlayerStats) error {
+func (d *Database) UpdateSave(saveID int64, currentNodeID string, visited, deletedNodeFiles, inventoryIDs, claimedNodes []string, stats PlayerStats, gameTime time.Time) error {
 	tx, err := d.conn.Begin()
 	if err != nil {
 		return err
@@ -274,8 +282,8 @@ func (d *Database) UpdateSave(saveID int64, currentNodeID string, visited, delet
 	defer tx.Rollback()
 
 	if _, err := tx.Exec(
-		`UPDATE saves SET current_node_id = ?, updated_at = ?, ram = ?, cpu = ?, claim_skill = ? WHERE id = ?`,
-		currentNodeID, time.Now(), stats.RAM, stats.CPU, stats.ClaimSkill, saveID,
+		`UPDATE saves SET current_node_id = ?, updated_at = ?, ram = ?, cpu = ?, claim_skill = ?, game_time = ? WHERE id = ?`,
+		currentNodeID, time.Now(), stats.RAM, stats.CPU, stats.ClaimSkill, gameTime.Unix(), saveID,
 	); err != nil {
 		return err
 	}

@@ -4,11 +4,15 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	"charm.land/bubbles/v2/textinput"
 	"charm.land/bubbles/v2/viewport"
 	"charm.land/lipgloss/v2"
 )
+
+// gameStartTime is the in-game clock start for every new save.
+var gameStartTime = time.Date(2026, 4, 19, 13, 0, 0, 0, time.UTC)
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -91,6 +95,9 @@ type GameState struct {
 
 	// Open email ID on the current node (resets on node change)
 	OpenEmailID string
+
+	// In-game clock
+	GameTime time.Time
 }
 
 // ── Constructors ──────────────────────────────────────────────────────────────
@@ -118,10 +125,11 @@ func newGameState(network *Network, saveID int64, saveName string, startNode *No
 		Input:            ti,
 		MessageLog:       []string{nodeInfo(startNode)},
 		HistoryIdx:       -1,
+		GameTime:         gameStartTime,
 	}
 }
 
-func newGameStateFromSave(network *Network, save *Save, currentNode *Node, visited, deletedNodeFiles, claimedNodes []string, inventory []Item, stats PlayerStats) *GameState {
+func newGameStateFromSave(network *Network, save *Save, currentNode *Node, visited, deletedNodeFiles, claimedNodes []string, inventory []Item, stats PlayerStats, gameTime time.Time) *GameState {
 	ti := textinput.New()
 	ti.Placeholder = "type a command..."
 	ti.Prompt = "▶ "
@@ -166,6 +174,7 @@ func newGameStateFromSave(network *Network, save *Save, currentNode *Node, visit
 		Input:            ti,
 		MessageLog:       []string{nodeInfo(currentNode)},
 		HistoryIdx:       -1,
+		GameTime:         gameTime,
 	}
 }
 
@@ -656,6 +665,7 @@ func (gs *GameState) handleCommand(input string) gameAction {
 		gs.VisitedNodes[target.ID] = true
 		gs.OpenCtx = openContextNode
 		gs.OpenEmailID = ""
+		gs.GameTime = gs.GameTime.Add(time.Hour)
 		gs.MessageLog = append(gs.MessageLog, nodeInfo(target))
 		return actionPersist
 
@@ -696,6 +706,7 @@ func (gs *GameState) handleCommand(input string) gameAction {
 					return actionNone
 				}
 				gs.Inventory = append(gs.Inventory, *a)
+				gs.GameTime = gs.GameTime.Add(time.Hour)
 				gs.MessageLog = append(gs.MessageLog, fmt.Sprintf("Assimilated: %s (%s)", a.Name, a.Type.Display()))
 				return actionPersist
 			}
@@ -708,6 +719,7 @@ func (gs *GameState) handleCommand(input string) gameAction {
 		}
 		if f.Type == ItemTypeClaimCode {
 			gs.Stats.ClaimSkill++
+			gs.GameTime = gs.GameTime.Add(time.Hour)
 			gs.DeletedNodeFiles[f.ID] = true
 			gs.MessageLog = append(gs.MessageLog,
 				fmt.Sprintf("Assimilated %s — Claim Skill increased to %d.", f.Name, gs.Stats.ClaimSkill))
@@ -718,6 +730,7 @@ func (gs *GameState) handleCommand(input string) gameAction {
 			return actionNone
 		}
 		gs.Inventory = append(gs.Inventory, *f)
+		gs.GameTime = gs.GameTime.Add(time.Hour)
 		gs.MessageLog = append(gs.MessageLog, fmt.Sprintf("Assimilated: %s (%s)", f.Name, f.Type.Display()))
 		return actionPersist
 

@@ -24,11 +24,12 @@ const (
 var mainMenuItems = []string{"New Game", "Load Game", "Quit"}
 
 type claimState struct {
-	active  bool
-	nodeID  string
-	elapsed time.Duration
-	total   time.Duration
-	bar     progress.Model
+	active     bool
+	nodeID     string
+	elapsed    time.Duration
+	total      time.Duration
+	bar        progress.Model
+	hoursAdded int // game-hours already credited for this operation
 }
 
 // ── SSH auth ──────────────────────────────────────────────────────────────────
@@ -60,10 +61,11 @@ type sshAuthState struct {
 	menuSel  int
 	options  []sshOption
 	// crack animation
-	cells    [sshGridSize]rune
-	locked   int
-	elapsed  time.Duration
-	duration time.Duration
+	cells      [sshGridSize]rune
+	locked     int
+	elapsed    time.Duration
+	duration   time.Duration
+	hoursAdded int
 }
 
 func newSSHCrackCells() [sshGridSize]rune {
@@ -94,15 +96,16 @@ const (
 )
 
 type connectAuthState struct {
-	active   bool
-	node     *Node
-	phase    authPhase
-	menuSel  int // 0=type pw, 1=use saved, 2=brute force
-	hasSaved bool
-	pwInput  textinput.Model
-	elapsed  time.Duration
-	total    time.Duration
-	bar      progress.Model
+	active     bool
+	node       *Node
+	phase      authPhase
+	menuSel    int // 0=type pw, 1=use saved, 2=brute force
+	hasSaved   bool
+	pwInput    textinput.Model
+	elapsed    time.Duration
+	total      time.Duration
+	bar        progress.Model
+	hoursAdded int
 }
 
 type AppModel struct {
@@ -231,9 +234,9 @@ type saveCreatedMsg struct {
 	err error
 }
 
-func createSaveCmd(db *Database, name, startNodeID string) tea.Cmd {
+func createSaveCmd(db *Database, name, startNodeID string, gameTime time.Time) tea.Cmd {
 	return func() tea.Msg {
-		id, err := db.CreateSave(name, startNodeID, []string{startNodeID})
+		id, err := db.CreateSave(name, startNodeID, []string{startNodeID}, gameTime)
 		return saveCreatedMsg{id: id, err: err}
 	}
 }
@@ -265,7 +268,7 @@ func (m AppModel) updateNewGame(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			m.nameErr = ""
 			startNode := m.network.Nodes[m.network.StartNodeID]
-			return m, createSaveCmd(m.db, name, startNode.ID)
+			return m, createSaveCmd(m.db, name, startNode.ID, gameStartTime)
 		}
 	}
 
@@ -362,7 +365,7 @@ func (m AppModel) updateLoadSave(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		currentNode := m.network.Nodes[msg.save.CurrentNodeID]
-		m.gs = newGameStateFromSave(m.network, msg.save, currentNode, msg.visited, msg.deletedNodeFiles, msg.claimedNodes, msg.inventory, msg.save.Stats)
+		m.gs = newGameStateFromSave(m.network, msg.save, currentNode, msg.visited, msg.deletedNodeFiles, msg.claimedNodes, msg.inventory, msg.save.Stats, msg.save.GameTime)
 		m.screen = ScreenGame
 		return m, nil
 
@@ -460,6 +463,7 @@ func completeConnect(gs *GameState, node *Node) {
 	gs.VisitedNodes[node.ID] = true
 	gs.OpenCtx = openContextNode
 	gs.OpenEmailID = ""
+	gs.GameTime = gs.GameTime.Add(time.Hour)
 	gs.MessageLog = append(gs.MessageLog, nodeInfo(node))
 }
 
@@ -471,8 +475,9 @@ func persistSaveCmd(db *Database, gs *GameState) tea.Cmd {
 	inventory := gs.inventoryIDs()
 	claimed := gs.claimedList()
 	stats := gs.Stats
+	gameTime := gs.GameTime
 	return func() tea.Msg {
-		return gameSavedMsg{err: db.UpdateSave(saveID, currentNodeID, visited, deleted, inventory, claimed, stats)}
+		return gameSavedMsg{err: db.UpdateSave(saveID, currentNodeID, visited, deleted, inventory, claimed, stats, gameTime)}
 	}
 }
 
@@ -487,6 +492,10 @@ func (m AppModel) updateGame(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.claim.elapsed += 100 * time.Millisecond
+		if newHours := int(m.claim.elapsed.Seconds()); newHours > m.claim.hoursAdded {
+			gs.GameTime = gs.GameTime.Add(time.Duration(newHours-m.claim.hoursAdded) * time.Hour)
+			m.claim.hoursAdded = newHours
+		}
 		if m.claim.elapsed >= m.claim.total {
 			// Claim complete — apply stats.
 			m.claim.active = false
@@ -508,6 +517,10 @@ func (m AppModel) updateGame(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.auth.elapsed += 100 * time.Millisecond
+		if newHours := int(m.auth.elapsed.Seconds()); newHours > m.auth.hoursAdded {
+			gs.GameTime = gs.GameTime.Add(time.Duration(newHours-m.auth.hoursAdded) * time.Hour)
+			m.auth.hoursAdded = newHours
+		}
 		if m.auth.elapsed >= m.auth.total {
 			// Brute force complete — connect.
 			node := m.auth.node
@@ -522,6 +535,10 @@ func (m AppModel) updateGame(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.ssh.elapsed += 75 * time.Millisecond
+		if newHours := int(m.ssh.elapsed.Seconds()); newHours > m.ssh.hoursAdded {
+			gs.GameTime = gs.GameTime.Add(time.Duration(newHours-m.ssh.hoursAdded) * time.Hour)
+			m.ssh.hoursAdded = newHours
+		}
 		// Advance locked count.
 		newLocked := int(float64(m.ssh.elapsed) / float64(m.ssh.duration) * float64(sshGridSize))
 		if newLocked > sshGridSize {
