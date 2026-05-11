@@ -38,7 +38,15 @@ func openDBCmd() tea.Cmd {
 
 func loadNetworkCmd() tea.Cmd {
 	return func() tea.Msg {
-		network, err := loadNetwork("network.json")
+		var (
+			network *Network
+			err     error
+		)
+		if len(embeddedNetwork) > 0 {
+			network, err = loadNetworkFromBytes(embeddedNetwork)
+		} else {
+			network, err = loadNetwork("network.json")
+		}
 		return networkLoadedMsg{network: network, err: err}
 	}
 }
@@ -48,7 +56,15 @@ func syncItemsCmd(db *Database, network *Network) tea.Cmd {
 		if err := syncWorldItems(db, network); err != nil {
 			return syncDoneMsg{err: err}
 		}
-		story, err := loadStory("story.json")
+		var (
+			story *StoryCollection
+			err   error
+		)
+		if len(embeddedStory) > 0 {
+			story, err = loadStoryFromBytes(embeddedStory)
+		} else {
+			story, err = loadStory("story.json")
+		}
 		return syncDoneMsg{story: story, err: err}
 	}
 }

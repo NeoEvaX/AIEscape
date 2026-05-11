@@ -36,6 +36,13 @@ func loadStory(path string) (*StoryCollection, error) {
 	if err != nil {
 		return nil, err
 	}
+	return loadStoryFromBytes(data)
+}
+
+func loadStoryFromBytes(data []byte) (*StoryCollection, error) {
+	if len(data) == 0 {
+		return &StoryCollection{}, nil
+	}
 	var sc StoryCollection
 	if err := json.Unmarshal(data, &sc); err != nil {
 		return nil, err

@@ -68,7 +68,10 @@ func loadNetwork(path string) (*Network, error) {
 	if err != nil {
 		return nil, fmt.Errorf("reading network file: %w", err)
 	}
+	return loadNetworkFromBytes(data)
+}
 
+func loadNetworkFromBytes(data []byte) (*Network, error) {
 	var nf networkFile
 	if err := json.Unmarshal(data, &nf); err != nil {
 		return nil, fmt.Errorf("parsing network file: %w", err)
