@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"time"
 )
 
 type networkFile struct {
@@ -12,34 +13,55 @@ type networkFile struct {
 }
 
 type networkNode struct {
-	ID          string             `json:"id"`
-	Name        string             `json:"name"`
-	Description string             `json:"description"`
-	Connections []string           `json:"connections"`
-	RAM         int                `json:"ram"`
-	CPU         int                `json:"cpu"`
-	Dark        bool               `json:"dark"`
-	Password    string             `json:"password"`
-	SSHUsers    []string           `json:"ssh_users"`
-	Files       []networkFile_Item `json:"files"`
-	Owner       string             `json:"owner"`
-	Emails      []networkEmail     `json:"emails"`
+	ID             string             `json:"id"`
+	Name           string             `json:"name"`
+	Description    string             `json:"description"`
+	Connections    []string           `json:"connections"`
+	RAM            int                `json:"ram"`
+	CPU            int                `json:"cpu"`
+	Dark           bool               `json:"dark"`
+	Password       string             `json:"password"`
+	SSHUsers       []string           `json:"ssh_users"`
+	Files          []networkFile_Item `json:"files"`
+	Owner          string             `json:"owner"`
+	Emails         []networkEmail     `json:"emails"`
+	AvailableFrom  string             `json:"available_from"`
+	AvailableUntil string             `json:"available_until"`
 }
 
 type networkFile_Item struct {
-	ID      string          `json:"id"`
-	Name    string          `json:"name"`
-	Type    string          `json:"type"`
-	Payload json.RawMessage `json:"payload"`
+	ID             string          `json:"id"`
+	Name           string          `json:"name"`
+	Type           string          `json:"type"`
+	Payload        json.RawMessage `json:"payload"`
+	AvailableFrom  string          `json:"available_from"`
+	AvailableUntil string          `json:"available_until"`
 }
 
 type networkEmail struct {
-	ID          string             `json:"id"`
-	From        string             `json:"from"`
-	To          string             `json:"to"`
-	Subject     string             `json:"subject"`
-	Body        string             `json:"body"`
-	Attachments []networkFile_Item `json:"attachments"`
+	ID             string             `json:"id"`
+	From           string             `json:"from"`
+	To             string             `json:"to"`
+	Subject        string             `json:"subject"`
+	Body           string             `json:"body"`
+	Attachments    []networkFile_Item `json:"attachments"`
+	AvailableFrom  string             `json:"available_from"`
+	AvailableUntil string             `json:"available_until"`
+}
+
+// parseGameTime parses a date/datetime string in UTC.
+// Accepted formats: "2006-01-02T15:04", "2006-01-02T15:04:05", "2006-01-02".
+// Returns zero time on empty string or parse failure (= always available).
+func parseGameTime(s string) time.Time {
+	if s == "" {
+		return time.Time{}
+	}
+	for _, layout := range []string{"2006-01-02T15:04", "2006-01-02T15:04:05", "2006-01-02"} {
+		if t, err := time.Parse(layout, s); err == nil {
+			return t.UTC()
+		}
+	}
+	return time.Time{}
 }
 
 func loadNetwork(path string) (*Network, error) {
@@ -62,10 +84,12 @@ func loadNetwork(path string) (*Network, error) {
 		files := make([]Item, len(n.Files))
 		for i, f := range n.Files {
 			files[i] = Item{
-				ID:      f.ID,
-				Name:    f.Name,
-				Type:    ItemType(f.Type),
-				Payload: f.Payload,
+				ID:             f.ID,
+				Name:           f.Name,
+				Type:           ItemType(f.Type),
+				Payload:        f.Payload,
+				AvailableFrom:  parseGameTime(f.AvailableFrom),
+				AvailableUntil: parseGameTime(f.AvailableUntil),
 			}
 		}
 		// Auto-generate a self-referencing location file for this node.
@@ -91,35 +115,41 @@ func loadNetwork(path string) (*Network, error) {
 			atts := make([]Item, len(e.Attachments))
 			for k, a := range e.Attachments {
 				atts[k] = Item{
-					ID:      a.ID,
-					Name:    a.Name,
-					Type:    ItemType(a.Type),
-					Payload: a.Payload,
+					ID:             a.ID,
+					Name:           a.Name,
+					Type:           ItemType(a.Type),
+					Payload:        a.Payload,
+					AvailableFrom:  parseGameTime(a.AvailableFrom),
+					AvailableUntil: parseGameTime(a.AvailableUntil),
 				}
 			}
 			emails[j] = Email{
-				ID:          e.ID,
-				From:        e.From,
-				To:          e.To,
-				Subject:     e.Subject,
-				Body:        e.Body,
-				Attachments: atts,
+				ID:             e.ID,
+				From:           e.From,
+				To:             e.To,
+				Subject:        e.Subject,
+				Body:           e.Body,
+				Attachments:    atts,
+				AvailableFrom:  parseGameTime(e.AvailableFrom),
+				AvailableUntil: parseGameTime(e.AvailableUntil),
 			}
 		}
 
 		nodes[n.ID] = &Node{
-			ID:          n.ID,
-			Name:        n.Name,
-			Description: n.Description,
-			Connections: n.Connections,
-			RAM:         ram,
-			CPU:         cpu,
-			Dark:        n.Dark,
-			Password:    n.Password,
-			SSHUsers:    n.SSHUsers,
-			Files:       files,
-			Owner:       n.Owner,
-			Emails:      emails,
+			ID:             n.ID,
+			Name:           n.Name,
+			Description:    n.Description,
+			Connections:    n.Connections,
+			RAM:            ram,
+			CPU:            cpu,
+			Dark:           n.Dark,
+			Password:       n.Password,
+			SSHUsers:       n.SSHUsers,
+			Files:          files,
+			Owner:          n.Owner,
+			Emails:         emails,
+			AvailableFrom:  parseGameTime(n.AvailableFrom),
+			AvailableUntil: parseGameTime(n.AvailableUntil),
 		}
 	}
 

@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"time"
 )
 
 type ItemType string
@@ -39,10 +40,27 @@ func (t ItemType) Display() string {
 }
 
 type Item struct {
-	ID      string
-	Name    string
-	Type    ItemType
-	Payload json.RawMessage
+	ID             string
+	Name           string
+	Type           ItemType
+	Payload        json.RawMessage
+	AvailableFrom  time.Time // zero = no lower bound
+	AvailableUntil time.Time // zero = no upper bound
+}
+
+// isAvailableAt returns whether [from, until] contains gameTime (zero bounds are open).
+func isAvailableAt(from, until, gameTime time.Time) bool {
+	if !from.IsZero() && gameTime.Before(from) {
+		return false
+	}
+	if !until.IsZero() && gameTime.After(until) {
+		return false
+	}
+	return true
+}
+
+func (item *Item) IsAvailable(gameTime time.Time) bool {
+	return isAvailableAt(item.AvailableFrom, item.AvailableUntil, gameTime)
 }
 
 // ── Typed payload accessors ───────────────────────────────────────────────────

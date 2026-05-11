@@ -18,28 +18,40 @@ var gameStartTime = time.Date(2026, 4, 19, 13, 0, 0, 0, time.UTC)
 
 // Email represents a mail message stored on a personal computer node.
 type Email struct {
-	ID          string
-	From        string
-	To          string
-	Subject     string
-	Body        string
-	Attachments []Item
+	ID             string
+	From           string
+	To             string
+	Subject        string
+	Body           string
+	Attachments    []Item
+	AvailableFrom  time.Time
+	AvailableUntil time.Time
+}
+
+func (e *Email) IsAvailable(gameTime time.Time) bool {
+	return isAvailableAt(e.AvailableFrom, e.AvailableUntil, gameTime)
 }
 
 type Node struct {
-	ID          string
-	Name        string
-	Description string
-	Connections []string
-	Files       []Item
-	RAM         int      // 1–255
-	CPU         int      // 1–255
-	Dark        bool     // dark nodes are hidden from scan unless player has the location file
-	Password    string   // empty = no password required
-	SSHUsers    []string // non-empty = SSH auth required; lists allowed usernames
-	Owner       string   // non-empty = personal computer; owner's email address
-	Emails      []Email  // mail stored on this PC node
-	Discovered  bool
+	ID             string
+	Name           string
+	Description    string
+	Connections    []string
+	Files          []Item
+	RAM            int      // 1–255
+	CPU            int      // 1–255
+	Dark           bool     // dark nodes are hidden from scan unless player has the location file
+	Password       string   // empty = no password required
+	SSHUsers       []string // non-empty = SSH auth required; lists allowed usernames
+	Owner          string   // non-empty = personal computer; owner's email address
+	Emails         []Email  // mail stored on this PC node
+	AvailableFrom  time.Time
+	AvailableUntil time.Time
+	Discovered     bool
+}
+
+func (n *Node) IsAvailable(gameTime time.Time) bool {
+	return isAvailableAt(n.AvailableFrom, n.AvailableUntil, gameTime)
 }
 
 type Network struct {
@@ -215,18 +227,25 @@ func (gs *GameState) inventoryIDs() []string {
 func (gs *GameState) nodeFiles() []Item {
 	files := make([]Item, 0, len(gs.CurrentNode.Files))
 	for _, f := range gs.CurrentNode.Files {
-		if !gs.DeletedNodeFiles[f.ID] {
-			files = append(files, f)
+		if gs.DeletedNodeFiles[f.ID] {
+			continue
 		}
+		if !f.IsAvailable(gs.GameTime) {
+			continue
+		}
+		files = append(files, f)
 	}
 	return files
 }
 
-// findNodeFile looks up a file on the current node by name or ID.
+// findNodeFile looks up a visible (non-deleted, available) file on the current node.
 func (gs *GameState) findNodeFile(query string) *Item {
 	for i := range gs.CurrentNode.Files {
 		f := &gs.CurrentNode.Files[i]
 		if gs.DeletedNodeFiles[f.ID] {
+			continue
+		}
+		if !f.IsAvailable(gs.GameTime) {
 			continue
 		}
 		if strings.EqualFold(f.Name, query) || f.ID == query {
@@ -234,6 +253,17 @@ func (gs *GameState) findNodeFile(query string) *Item {
 		}
 	}
 	return nil
+}
+
+// availableEmails returns the emails on the current node visible at the current game time.
+func (gs *GameState) availableEmails() []Email {
+	var result []Email
+	for _, e := range gs.CurrentNode.Emails {
+		if e.IsAvailable(gs.GameTime) {
+			result = append(result, e)
+		}
+	}
+	return result
 }
 
 // findInventoryItem looks up an item in inventory by name or ID.
@@ -333,7 +363,8 @@ func (gs *GameState) hasAppAction(action string) bool {
 	return false
 }
 
-// visibleConnections returns the nodes connected to n that the player can see.
+// visibleConnections returns the nodes connected to node that the player can see
+// at the current game time.
 func (gs *GameState) visibleConnections(node *Node) []*Node {
 	var result []*Node
 	for _, id := range node.Connections {
@@ -342,6 +373,9 @@ func (gs *GameState) visibleConnections(node *Node) []*Node {
 			continue
 		}
 		if n.Dark && !gs.hasLocationFile(id) {
+			continue
+		}
+		if !n.IsAvailable(gs.GameTime) {
 			continue
 		}
 		result = append(result, n)
@@ -443,13 +477,14 @@ func (gs *GameState) hasLocationFile(nodeID string) bool {
 }
 
 // findEmailAttachment looks up an attachment in the currently-open email by name or ID.
+// Only searches emails visible at the current game time.
 func (gs *GameState) findEmailAttachment(query string) *Item {
 	if gs.OpenEmailID == "" {
 		return nil
 	}
 	for i := range gs.CurrentNode.Emails {
 		e := &gs.CurrentNode.Emails[i]
-		if e.ID != gs.OpenEmailID {
+		if e.ID != gs.OpenEmailID || !e.IsAvailable(gs.GameTime) {
 			continue
 		}
 		for j := range e.Attachments {
@@ -643,6 +678,10 @@ func (gs *GameState) handleCommand(input string) gameAction {
 		target, exists := gs.Network.Nodes[targetID]
 		if !exists {
 			gs.MessageLog = append(gs.MessageLog, fmt.Sprintf("Node %q does not exist.", targetID))
+			return actionNone
+		}
+		if !target.IsAvailable(gs.GameTime) {
+			gs.MessageLog = append(gs.MessageLog, fmt.Sprintf("Node %s is currently offline.", targetID))
 			return actionNone
 		}
 		if !gs.Network.CanReach(gs.CurrentNode.ID, targetID) {
@@ -904,14 +943,15 @@ func (gs *GameState) handleCommand(input string) gameAction {
 			return actionNone
 		}
 		gs.OpenEmailID = ""
-		if len(gs.CurrentNode.Emails) == 0 {
+		emails := gs.availableEmails()
+		if len(emails) == 0 {
 			gs.MessageLog = append(gs.MessageLog,
 				fmt.Sprintf("Inbox — %s (no messages)", gs.CurrentNode.Owner))
 			return actionNone
 		}
 		gs.MessageLog = append(gs.MessageLog,
-			fmt.Sprintf("Inbox — %s (%d messages)", gs.CurrentNode.Owner, len(gs.CurrentNode.Emails)))
-		for i, e := range gs.CurrentNode.Emails {
+			fmt.Sprintf("Inbox — %s (%d messages)", gs.CurrentNode.Owner, len(emails)))
+		for i, e := range emails {
 			attachLabel := ""
 			if len(e.Attachments) == 1 {
 				attachLabel = "  [1 attachment]"
@@ -932,13 +972,14 @@ func (gs *GameState) handleCommand(input string) gameAction {
 			gs.MessageLog = append(gs.MessageLog, "Usage: read <number>")
 			return actionNone
 		}
+		emails := gs.availableEmails()
 		n, err := strconv.Atoi(parts[1])
-		if err != nil || n < 1 || n > len(gs.CurrentNode.Emails) {
+		if err != nil || n < 1 || n > len(emails) {
 			gs.MessageLog = append(gs.MessageLog,
-				fmt.Sprintf("Invalid email number. Use 'mail' to list emails (1–%d).", len(gs.CurrentNode.Emails)))
+				fmt.Sprintf("Invalid email number. Use 'mail' to list emails (1–%d).", len(emails)))
 			return actionNone
 		}
-		email := &gs.CurrentNode.Emails[n-1]
+		email := &emails[n-1]
 		gs.OpenEmailID = email.ID
 		lines := []string{
 			fmt.Sprintf("── Email %d / %d ──", n, len(gs.CurrentNode.Emails)),
