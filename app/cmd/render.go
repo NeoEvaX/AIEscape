@@ -139,7 +139,7 @@ func renderStatusBar(gs *GameState) string {
 			sprint(len(gs.VisitedNodes))+"/"+sprint(len(gs.Network.Nodes))),
 		styleStatusLabel.Render("cpu") + " " + styleStatusValue.Render(sprint(gs.Stats.CPU)) +
 			"  " + styleStatusLabel.Render("cs") + " " + styleStatusValue.Render(sprint(gs.Stats.ClaimSkill)),
-		styleStatusLabel.Render("time") + " " + styleStatusValue.Render(gs.GameTime.Format("Jan 02 2006  15:04")),
+		styleStatusLabel.Render("time") + " " + styleStatusValue.Render(gs.GameTime.Format("Mon  Jan 02 2006  15:04")),
 	}
 	bar := "  " + strings.Join(parts, sep)
 	rule := styleDivider.Render("  " + strings.Repeat("─", 70))
