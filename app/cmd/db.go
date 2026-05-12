@@ -289,7 +289,7 @@ func (d *Database) LoadSave(id int64) (*Save, []string, error) {
 }
 
 // UpdateSave persists all mutable save state in a single transaction.
-func (d *Database) UpdateSave(saveID int64, currentNodeID string, visited, deletedNodeFiles, inventoryIDs, claimedNodes, seenEvents, readEmails []string, stats PlayerStats, gameTime time.Time, connectCount, assimilateCount int) error {
+func (d *Database) UpdateSave(saveID int64, data SaveData) error {
 	tx, err := d.conn.Begin()
 	if err != nil {
 		return err
@@ -298,17 +298,17 @@ func (d *Database) UpdateSave(saveID int64, currentNodeID string, visited, delet
 
 	if _, err := tx.Exec(
 		`UPDATE saves SET current_node_id = ?, updated_at = ?, cpu = ?, claim_skill = ?, game_time = ?, connect_count = ?, assimilate_count = ? WHERE id = ?`,
-		currentNodeID, time.Now(), stats.CPU, stats.ClaimSkill, gameTime.Unix(), connectCount, assimilateCount, saveID,
+		data.CurrentNodeID, time.Now(), data.Stats.CPU, data.Stats.ClaimSkill, data.GameTime.Unix(), data.ConnectCount, data.AssimilateCount, saveID,
 	); err != nil {
 		return err
 	}
 
-	replaceList(tx, `visited_nodes`, `node_id`, saveID, visited)
-	replaceList(tx, `save_deleted_node_files`, `item_id`, saveID, deletedNodeFiles)
-	replaceList(tx, `save_items`, `item_id`, saveID, inventoryIDs)
-	replaceList(tx, `save_claimed_nodes`, `node_id`, saveID, claimedNodes)
-	replaceList(tx, `save_seen_events`, `event_id`, saveID, seenEvents)
-	replaceList(tx, `save_read_emails`, `email_id`, saveID, readEmails)
+	replaceList(tx, `visited_nodes`, `node_id`, saveID, data.Visited)
+	replaceList(tx, `save_deleted_node_files`, `item_id`, saveID, data.DeletedFiles)
+	replaceList(tx, `save_items`, `item_id`, saveID, data.InventoryIDs)
+	replaceList(tx, `save_claimed_nodes`, `node_id`, saveID, data.ClaimedNodes)
+	replaceList(tx, `save_seen_events`, `event_id`, saveID, data.SeenEvents)
+	replaceList(tx, `save_read_emails`, `email_id`, saveID, data.ReadEmails)
 
 	return tx.Commit()
 }

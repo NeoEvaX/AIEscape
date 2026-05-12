@@ -159,3 +159,23 @@ func (item *Item) AsNetworkBridge() (*NetworkBridgePayload, error) {
 	var p NetworkBridgePayload
 	return &p, json.Unmarshal(item.Payload, &p)
 }
+
+// Open returns the human-readable text content of the item.
+// Returns ("", false) if the item type has no readable text.
+func (item *Item) Open() (string, bool) {
+	switch item.Type {
+	case ItemTypeTextFile:
+		p, err := item.AsTextFile()
+		if err != nil {
+			return "", false
+		}
+		return p.Text, true
+	case ItemTypeApplication:
+		p, err := item.AsApplication()
+		if err != nil {
+			return "", false
+		}
+		return p.Text, true
+	}
+	return "", false
+}

@@ -3,6 +3,8 @@ package main
 import (
 	"encoding/json"
 	"os"
+
+	tea "charm.land/bubbletea/v2"
 )
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -82,6 +84,80 @@ func (t *StoryTrigger) isSatisfied(gs *GameState) bool {
 	}
 	return false
 }
+
+// ── StoryPlayer ───────────────────────────────────────────────────────────────
+
+// StoryPlayer manages the typewriter animation for story events.
+// AppModel holds a StoryPlayer and calls Push/Tick/Skip, passing &gs.MessageLog
+// so the player can append placeholders and update them in place.
+type StoryPlayer struct {
+	queue  []StoryEvent
+	text   string
+	pos    int
+	logIdx int // index in MessageLog of the active typewriter slot; -1 = idle
+}
+
+func newStoryPlayer() StoryPlayer {
+	return StoryPlayer{logIdx: -1}
+}
+
+// IsActive returns true if a typewriter animation is currently running.
+func (sp StoryPlayer) IsActive() bool { return sp.logIdx >= 0 }
+
+// Push queues new events and starts the typewriter if idle.
+func (sp StoryPlayer) Push(events []StoryEvent, log *[]string) (StoryPlayer, tea.Cmd) {
+	sp.queue = append(sp.queue, events...)
+	if sp.logIdx >= 0 || len(sp.queue) == 0 {
+		return sp, nil
+	}
+	return sp.startNext(log)
+}
+
+func (sp StoryPlayer) startNext(log *[]string) (StoryPlayer, tea.Cmd) {
+	next := sp.queue[0]
+	sp.queue = sp.queue[1:]
+	sp.text = next.Text
+	sp.pos = 0
+	*log = append(*log, storyLogEntry(""))
+	sp.logIdx = len(*log) - 1
+	return sp, storyTickCmd()
+}
+
+// Tick advances the typewriter by one character.
+func (sp StoryPlayer) Tick(log *[]string) (StoryPlayer, tea.Cmd) {
+	if sp.logIdx < 0 {
+		return sp, nil
+	}
+	if sp.pos < len(sp.text) {
+		sp.pos++
+		(*log)[sp.logIdx] = storyLogEntry(sp.text[:sp.pos])
+		return sp, storyTickCmd()
+	}
+	sp.logIdx = -1
+	sp.text = ""
+	sp.pos = 0
+	if len(sp.queue) > 0 {
+		return sp.startNext(log)
+	}
+	return sp, nil
+}
+
+// Skip completes the current event immediately and starts the next if queued.
+func (sp StoryPlayer) Skip(log *[]string) (StoryPlayer, tea.Cmd) {
+	if sp.logIdx < 0 {
+		return sp, nil
+	}
+	(*log)[sp.logIdx] = storyLogEntry(sp.text)
+	sp.logIdx = -1
+	sp.text = ""
+	sp.pos = 0
+	if len(sp.queue) > 0 {
+		return sp.startNext(log)
+	}
+	return sp, nil
+}
+
+// ── Trigger evaluation ────────────────────────────────────────────────────────
 
 // checkTriggers returns all newly-fired story events and marks them as seen.
 func (sc *StoryCollection) checkTriggers(gs *GameState) []StoryEvent {

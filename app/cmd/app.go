@@ -23,13 +23,37 @@ const (
 
 var mainMenuItems = []string{"New Game", "Load Game", "Quit"}
 
-type claimState struct {
-	active     bool
-	nodeID     string
+// timedBase is embedded by the three timed-animation sub-states.
+// It centralises elapsed tracking and in-game time advancement.
+type timedBase struct {
 	elapsed    time.Duration
 	total      time.Duration
-	bar        progress.Model
-	hoursAdded int // game-hours already credited for this operation
+	hoursAdded int
+}
+
+// advance increments elapsed by tick and credits whole-second intervals as in-game hours.
+func (tb *timedBase) advance(tick time.Duration, gs *GameState) {
+	tb.elapsed += tick
+	if newHours := int(tb.elapsed.Seconds()); newHours > tb.hoursAdded {
+		gs.GameTime = gs.GameTime.Add(time.Duration(newHours-tb.hoursAdded) * time.Hour)
+		tb.hoursAdded = newHours
+	}
+}
+
+func (tb timedBase) pct() float64 {
+	if tb.total == 0 {
+		return 0
+	}
+	return float64(tb.elapsed) / float64(tb.total)
+}
+
+func (tb timedBase) done() bool { return tb.elapsed >= tb.total }
+
+type claimState struct {
+	active  bool
+	nodeID  string
+	bar     progress.Model
+	timedBase
 }
 
 // ── SSH auth ──────────────────────────────────────────────────────────────────
@@ -55,17 +79,15 @@ const (
 )
 
 type sshAuthState struct {
-	active   bool
-	node     *Node
-	phase    sshAuthPhase
-	menuSel  int
-	options  []sshOption
+	active  bool
+	node    *Node
+	phase   sshAuthPhase
+	menuSel int
+	options []sshOption
 	// crack animation
-	cells      [sshGridSize]rune
-	locked     int
-	elapsed    time.Duration
-	duration   time.Duration
-	hoursAdded int
+	cells  [sshGridSize]rune
+	locked int
+	timedBase
 }
 
 func newSSHCrackCells() [sshGridSize]rune {
@@ -96,16 +118,14 @@ const (
 )
 
 type connectAuthState struct {
-	active     bool
-	node       *Node
-	phase      authPhase
-	menuSel    int // 0=type pw, 1=use saved, 2=brute force
-	hasSaved   bool
-	pwInput    textinput.Model
-	elapsed    time.Duration
-	total      time.Duration
-	bar        progress.Model
-	hoursAdded int
+	active   bool
+	node     *Node
+	phase    authPhase
+	menuSel  int // 0=type pw, 1=use saved, 2=brute force
+	hasSaved bool
+	pwInput  textinput.Model
+	bar      progress.Model
+	timedBase
 }
 
 type AppModel struct {
@@ -132,12 +152,7 @@ type AppModel struct {
 	claim               claimState
 	auth                connectAuthState
 	ssh                 sshAuthState
-
-	// Story typewriter
-	storyQueue  []StoryEvent
-	storyText   string
-	storyPos    int
-	storyLogIdx int // index into gs.MessageLog of the active typewriter slot; -1 = none
+	player              StoryPlayer
 
 	// Scrollable log
 	logScroll int // lines scrolled up from the bottom; 0 = pinned to bottom
@@ -147,11 +162,11 @@ type AppModel struct {
 
 func NewAppModel(db *Database, network *Network, story *StoryCollection) AppModel {
 	return AppModel{
-		screen:      ScreenMainMenu,
-		db:          db,
-		network:     network,
-		story:       story,
-		storyLogIdx: -1,
+		screen:  ScreenMainMenu,
+		db:      db,
+		network: network,
+		story:   story,
+		player:  newStoryPlayer(),
 	}
 }
 
@@ -523,17 +538,9 @@ func storyLogEntry(text string) string {
 // updated AppModel and a Cmd to start the typewriter if one is queued.
 func (m AppModel) withStoryCheck(gs *GameState) (AppModel, tea.Cmd) {
 	fired := m.story.checkTriggers(gs)
-	m.storyQueue = append(m.storyQueue, fired...)
-	if len(m.storyQueue) > 0 && m.storyLogIdx == -1 {
-		next := m.storyQueue[0]
-		m.storyQueue = m.storyQueue[1:]
-		m.storyText = next.Text
-		m.storyPos = 0
-		gs.MessageLog = append(gs.MessageLog, storyLogEntry(""))
-		m.storyLogIdx = len(gs.MessageLog) - 1
-		return m, storyTickCmd()
-	}
-	return m, nil
+	var cmd tea.Cmd
+	m.player, cmd = m.player.Push(fired, &gs.MessageLog)
+	return m, cmd
 }
 
 // completeConnect performs the node connection after auth succeeds.
@@ -550,19 +557,9 @@ func completeConnect(gs *GameState, node *Node) {
 
 func persistSaveCmd(db *Database, gs *GameState) tea.Cmd {
 	saveID := gs.SaveID
-	currentNodeID := gs.CurrentNode.ID
-	visited := gs.visitedList()
-	deleted := gs.deletedFilesList()
-	inventory := gs.inventoryIDs()
-	claimed := gs.claimedList()
-	seenEvents := gs.seenEventsList()
-	readEmails := gs.readEmailsList()
-	stats := gs.Stats
-	gameTime := gs.GameTime
-	connectCount := gs.ConnectCount
-	assimilateCount := gs.AssimilateCount
+	data := gs.Snapshot()
 	return func() tea.Msg {
-		return gameSavedMsg{err: db.UpdateSave(saveID, currentNodeID, visited, deleted, inventory, claimed, seenEvents, readEmails, stats, gameTime, connectCount, assimilateCount)}
+		return gameSavedMsg{err: db.UpdateSave(saveID, data)}
 	}
 }
 
@@ -573,40 +570,16 @@ func (m AppModel) updateGame(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case storyTickMsg:
-		if m.storyText == "" || m.storyLogIdx == -1 {
-			return m, nil
-		}
-		if m.storyPos < len(m.storyText) {
-			m.storyPos++
-			gs.MessageLog[m.storyLogIdx] = storyLogEntry(m.storyText[:m.storyPos])
-			return m, storyTickCmd()
-		}
-		// Typing complete — mark done and advance to next queued event.
-		m.storyLogIdx = -1
-		m.storyText = ""
-		m.storyPos = 0
-		if len(m.storyQueue) > 0 {
-			next := m.storyQueue[0]
-			m.storyQueue = m.storyQueue[1:]
-			m.storyText = next.Text
-			m.storyPos = 0
-			gs.MessageLog = append(gs.MessageLog, storyLogEntry(""))
-			m.storyLogIdx = len(gs.MessageLog) - 1
-			return m, storyTickCmd()
-		}
-		return m, nil
+		var cmd tea.Cmd
+		m.player, cmd = m.player.Tick(&gs.MessageLog)
+		return m, cmd
 
 	case claimTickMsg:
 		if !m.claim.active {
 			return m, nil
 		}
-		m.claim.elapsed += 100 * time.Millisecond
-		if newHours := int(m.claim.elapsed.Seconds()); newHours > m.claim.hoursAdded {
-			gs.GameTime = gs.GameTime.Add(time.Duration(newHours-m.claim.hoursAdded) * time.Hour)
-			m.claim.hoursAdded = newHours
-		}
-		if m.claim.elapsed >= m.claim.total {
-			// Claim complete — apply stats.
+		m.claim.advance(100*time.Millisecond, gs)
+		if m.claim.done() {
 			m.claim.active = false
 			node := gs.Network.Nodes[m.claim.nodeID]
 			claimSkill := gs.Stats.ClaimSkill
@@ -624,13 +597,8 @@ func (m AppModel) updateGame(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if !m.auth.active || m.auth.phase != authPhaseBrute {
 			return m, nil
 		}
-		m.auth.elapsed += 100 * time.Millisecond
-		if newHours := int(m.auth.elapsed.Seconds()); newHours > m.auth.hoursAdded {
-			gs.GameTime = gs.GameTime.Add(time.Duration(newHours-m.auth.hoursAdded) * time.Hour)
-			m.auth.hoursAdded = newHours
-		}
-		if m.auth.elapsed >= m.auth.total {
-			// Brute force complete — connect.
+		m.auth.advance(100*time.Millisecond, gs)
+		if m.auth.done() {
 			node := m.auth.node
 			m.auth = connectAuthState{}
 			completeConnect(gs, node)
@@ -643,23 +611,16 @@ func (m AppModel) updateGame(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if !m.ssh.active || m.ssh.phase != sshPhaseCrack {
 			return m, nil
 		}
-		m.ssh.elapsed += 75 * time.Millisecond
-		if newHours := int(m.ssh.elapsed.Seconds()); newHours > m.ssh.hoursAdded {
-			gs.GameTime = gs.GameTime.Add(time.Duration(newHours-m.ssh.hoursAdded) * time.Hour)
-			m.ssh.hoursAdded = newHours
-		}
-		// Advance locked count.
-		newLocked := int(float64(m.ssh.elapsed) / float64(m.ssh.duration) * float64(sshGridSize))
+		m.ssh.advance(75*time.Millisecond, gs)
+		newLocked := int(m.ssh.pct() * float64(sshGridSize))
 		if newLocked > sshGridSize {
 			newLocked = sshGridSize
 		}
 		m.ssh.locked = newLocked
-		// Randomize all unlocked cells.
 		for i := m.ssh.locked; i < sshGridSize; i++ {
 			m.ssh.cells[i] = sshCrackChars[rand.Intn(len(sshCrackChars))]
 		}
 		if m.ssh.locked >= sshGridSize {
-			// Crack complete — connect.
 			node := m.ssh.node
 			m.ssh = sshAuthState{}
 			gs.MessageLog = append(gs.MessageLog, "SSH encryption cracked.")
@@ -758,24 +719,14 @@ func (m AppModel) updateGame(msg tea.Msg) (tea.Model, tea.Cmd) {
 			gs.HistoryIdx = -1
 			gs.HistoryDraft = ""
 
-			// If a story event is still typing, skip it to completion on Enter.
-			if m.storyLogIdx != -1 && m.storyPos < len(m.storyText) {
-				m.storyPos = len(m.storyText)
-				gs.MessageLog[m.storyLogIdx] = storyLogEntry(m.storyText)
-				m.storyLogIdx = -1
-				m.storyText = ""
-				if len(m.storyQueue) > 0 {
-					next := m.storyQueue[0]
-					m.storyQueue = m.storyQueue[1:]
-					m.storyText = next.Text
-					m.storyPos = 0
-					gs.MessageLog = append(gs.MessageLog, storyLogEntry(""))
-					m.storyLogIdx = len(gs.MessageLog) - 1
-				}
+			// Skip any active typewriter event; start the next if queued.
+			var skipCmd tea.Cmd
+			if m.player.IsActive() {
+				m.player, skipCmd = m.player.Skip(&gs.MessageLog)
 			}
 
 			if input != "" {
-				m.logScroll = 0 // snap back to bottom on any command
+				m.logScroll = 0
 				gs.History = append(gs.History, input)
 
 				// Intercept the lore command here since it needs access to m.story.
@@ -797,20 +748,20 @@ func (m AppModel) updateGame(msg tea.Msg) (tea.Model, tea.Cmd) {
 								fmt.Sprintf("  [%02d]  %s", i+1, event.Text))
 						}
 					}
-					return m, nil
+					return m, skipCmd
 				}
 
-				action := gs.handleCommand(input)
+				cmdLines, action := handleCommand(gs, input)
+				gs.MessageLog = append(gs.MessageLog, cmdLines...)
 
-				// Fire story events triggered by this command.
 				m, stCmd := m.withStoryCheck(gs)
 
 				switch action {
 				case actionPersist:
-					return m, tea.Batch(persistSaveCmd(m.db, gs), stCmd)
+					return m, tea.Batch(persistSaveCmd(m.db, gs), stCmd, skipCmd)
 				case actionQuit:
 					m.awaitingQuitConfirm = true
-					return m, stCmd
+					return m, tea.Batch(stCmd, skipCmd)
 				case actionConnectSSH:
 					node := gs.PendingConnectNode
 					gs.PendingConnectNode = nil
@@ -828,7 +779,7 @@ func (m AppModel) updateGame(msg tea.Msg) (tea.Model, tea.Cmd) {
 						phase:   sshPhaseMenu,
 						options: opts,
 					}
-					return m, stCmd
+					return m, tea.Batch(stCmd, skipCmd)
 				case actionConnectAuth:
 					node := gs.PendingConnectNode
 					gs.PendingConnectNode = nil
@@ -847,7 +798,7 @@ func (m AppModel) updateGame(msg tea.Msg) (tea.Model, tea.Cmd) {
 						hasSaved: gs.hasPasswordFor(node.ID),
 						pwInput:  pwInput,
 					}
-					return m, stCmd
+					return m, tea.Batch(stCmd, skipCmd)
 				case actionClaim:
 					node := gs.CurrentNode
 					playerCPU := gs.Stats.CPU
@@ -859,17 +810,18 @@ func (m AppModel) updateGame(msg tea.Msg) (tea.Model, tea.Cmd) {
 						secs = 0.5
 					}
 					m.claim = claimState{
-						active:  true,
-						nodeID:  node.ID,
-						elapsed: 0,
-						total:   time.Duration(secs * float64(time.Second)),
-						bar:     progress.New(progress.WithDefaultBlend(), progress.WithWidth(40)),
+						active: true,
+						nodeID: node.ID,
+						bar:    progress.New(progress.WithDefaultBlend(), progress.WithWidth(40)),
+						timedBase: timedBase{
+							total: time.Duration(secs * float64(time.Second)),
+						},
 					}
-					return m, tea.Batch(claimTickCmd(), stCmd)
+					return m, tea.Batch(claimTickCmd(), stCmd, skipCmd)
 				}
-				return m, stCmd
+				return m, tea.Batch(stCmd, skipCmd)
 			}
-			return m, nil
+			return m, skipCmd
 		}
 	}
 	var cmd tea.Cmd
@@ -924,8 +876,7 @@ func (m AppModel) updateSSH(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 				m.ssh.phase = sshPhaseCrack
 				m.ssh.cells = newSSHCrackCells()
 				m.ssh.locked = 0
-				m.ssh.elapsed = 0
-				m.ssh.duration = sshCrackDuration(gs, m.ssh.node)
+				m.ssh.timedBase = timedBase{total: sshCrackDuration(gs, m.ssh.node)}
 				gs.MessageLog = append(gs.MessageLog, fmt.Sprintf("Cracking SSH on %s...", m.ssh.node.Name))
 				return m, sshTickCmd()
 			}
@@ -936,7 +887,7 @@ func (m AppModel) updateSSH(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		if msg.String() == "esc" {
 			m.ssh.phase = sshPhaseMenu
 			m.ssh.locked = 0
-			m.ssh.elapsed = 0
+			m.ssh.timedBase = timedBase{}
 			gs.MessageLog = append(gs.MessageLog, "SSH crack aborted.")
 		}
 		return m, nil
@@ -1048,7 +999,7 @@ func (m AppModel) updateAuth(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case authPhaseBrute:
 		if msg.String() == "esc" {
 			m.auth.phase = authPhaseMenu
-			m.auth.elapsed = 0
+			m.auth.timedBase = timedBase{}
 			gs.MessageLog = append(gs.MessageLog, "Brute force aborted.")
 		}
 		return m, nil
@@ -1085,8 +1036,7 @@ func (m AppModel) startBruteForce() (AppModel, tea.Cmd) {
 	node := m.auth.node
 	secs := bruteEst(gs, node)
 	m.auth.phase = authPhaseBrute
-	m.auth.elapsed = 0
-	m.auth.total = time.Duration(secs * float64(time.Second))
+	m.auth.timedBase = timedBase{total: time.Duration(secs * float64(time.Second))}
 	m.auth.bar = progress.New(progress.WithDefaultBlend(), progress.WithWidth(40))
 	gs.MessageLog = append(gs.MessageLog, fmt.Sprintf("Brute forcing %s...", node.Name))
 	return m, bruteTickCmd()
@@ -1126,9 +1076,8 @@ func (m AppModel) viewAuth() string {
 		b.WriteString(styleDetail.Render("  Enter  submit  •  Esc  back"))
 
 	case authPhaseBrute:
-		pct := float64(m.auth.elapsed) / float64(m.auth.total)
 		b.WriteString(styleSection.Render(fmt.Sprintf("  Brute forcing %s...", node.Name)) + "\n")
-		b.WriteString("  " + m.auth.bar.ViewAs(pct) + "\n")
+		b.WriteString("  " + m.auth.bar.ViewAs(m.auth.pct()) + "\n")
 		b.WriteString(styleDetail.Render("  Esc  abort"))
 	}
 	return b.String()
@@ -1193,9 +1142,8 @@ func (m AppModel) viewGame() string {
 	} else if m.auth.active {
 		b.WriteString(m.viewAuth())
 	} else if m.claim.active {
-		pct := float64(m.claim.elapsed) / float64(m.claim.total)
 		b.WriteString(styleSection.Render("  Claiming "+gs.CurrentNode.Name+"...") + "\n")
-		b.WriteString("  " + m.claim.bar.ViewAs(pct) + "\n")
+		b.WriteString("  " + m.claim.bar.ViewAs(m.claim.pct()) + "\n")
 		b.WriteString(styleDetail.Render("  Esc  abort") + "\n")
 	} else if m.awaitingQuitConfirm {
 		b.WriteString(styleWarn.Render("  Return to main menu? [y/n]") + "\n")

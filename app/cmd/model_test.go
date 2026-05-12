@@ -105,6 +105,13 @@ func logContains(gs *GameState, substr string) bool {
 	return false
 }
 
+// runCmd calls handleCommand, appends returned lines to gs.MessageLog, and returns the action.
+func runCmd(gs *GameState, input string) gameAction {
+	lines, action := handleCommand(gs, input)
+	gs.MessageLog = append(gs.MessageLog, lines...)
+	return action
+}
+
 // ── isAvailableAt ─────────────────────────────────────────────────────────────
 
 func TestIsAvailableAt(t *testing.T) {
@@ -382,7 +389,7 @@ func TestConnect_Success(t *testing.T) {
 	net := mkNet(a, b)
 	gs := mkState(net, a)
 
-	action := gs.handleCommand("connect b")
+	action := runCmd(gs,"connect b")
 
 	if action != actionPersist {
 		t.Errorf("action = %v; want actionPersist", action)
@@ -405,7 +412,7 @@ func TestConnect_NodeNotExist(t *testing.T) {
 	a := mkNode("a")
 	gs := mkState(mkNet(a), a)
 
-	action := gs.handleCommand("connect z")
+	action := runCmd(gs,"connect z")
 
 	if action != actionNone {
 		t.Errorf("action = %v; want actionNone", action)
@@ -420,7 +427,7 @@ func TestConnect_NoPath(t *testing.T) {
 	b := mkNode("b")
 	gs := mkState(mkNet(a, b), a)
 
-	action := gs.handleCommand("connect b")
+	action := runCmd(gs,"connect b")
 
 	if action != actionNone {
 		t.Errorf("action = %v; want actionNone", action)
@@ -435,7 +442,7 @@ func TestConnect_CrossNetwork_Blocked(t *testing.T) {
 	b := mkNode("b", withNet("dmz"))
 	gs := mkState(mkNet(a, b), a)
 
-	action := gs.handleCommand("connect b")
+	action := runCmd(gs,"connect b")
 
 	if action != actionNone {
 		t.Errorf("action = %v; want actionNone", action)
@@ -453,7 +460,7 @@ func TestConnect_PasswordRequired(t *testing.T) {
 	b := mkNode("b", withPW("secret"))
 	gs := mkState(mkNet(a, b), a)
 
-	action := gs.handleCommand("connect b")
+	action := runCmd(gs,"connect b")
 
 	if action != actionConnectAuth {
 		t.Errorf("action = %v; want actionConnectAuth", action)
@@ -468,7 +475,7 @@ func TestConnect_SSHRequired(t *testing.T) {
 	b := mkNode("b", withSSH("admin"))
 	gs := mkState(mkNet(a, b), a)
 
-	action := gs.handleCommand("connect b")
+	action := runCmd(gs,"connect b")
 
 	if action != actionConnectSSH {
 		t.Errorf("action = %v; want actionConnectSSH", action)
@@ -481,7 +488,7 @@ func TestConnect_Unavailable(t *testing.T) {
 	b := mkNode("b", withAvailFrom(future))
 	gs := mkState(mkNet(a, b), a)
 
-	action := gs.handleCommand("connect b")
+	action := runCmd(gs,"connect b")
 
 	if action != actionNone {
 		t.Errorf("action = %v; want actionNone", action)
@@ -498,7 +505,7 @@ func TestConnect_ViaLocFile_SameNetwork(t *testing.T) {
 		NetworkLocationPayload{NodeID: "b"})
 	gs := mkState(mkNet(a, b), a, withInv(locFile))
 
-	action := gs.handleCommand("connect b")
+	action := runCmd(gs,"connect b")
 
 	if action != actionPersist {
 		t.Errorf("action = %v; want actionPersist (loc file should enable connect)", action)
@@ -516,7 +523,7 @@ func TestConnect_ViaLocFile_CrossNetwork_Blocked(t *testing.T) {
 		NetworkLocationPayload{NodeID: "b"})
 	gs := mkState(mkNet(a, b), a, withInv(locFile))
 
-	action := gs.handleCommand("connect b")
+	action := runCmd(gs,"connect b")
 
 	if action != actionNone {
 		t.Errorf("action = %v; want actionNone (loc file can't bridge networks)", action)
@@ -530,7 +537,7 @@ func TestBridge_Success(t *testing.T) {
 	b := mkNode("b", withNet("dmz"))
 	gs := mkState(mkNet(a, b), a, withInv(bridgeItem("default", "dmz")))
 
-	action := gs.handleCommand("bridge b")
+	action := runCmd(gs,"bridge b")
 
 	if action != actionPersist {
 		t.Errorf("action = %v; want actionPersist", action)
@@ -545,7 +552,7 @@ func TestBridge_NoItem(t *testing.T) {
 	b := mkNode("b", withNet("dmz"))
 	gs := mkState(mkNet(a, b), a) // no bridge item
 
-	action := gs.handleCommand("bridge b")
+	action := runCmd(gs,"bridge b")
 
 	if action != actionNone {
 		t.Errorf("action = %v; want actionNone", action)
@@ -561,7 +568,7 @@ func TestBridge_WrongDirection(t *testing.T) {
 	b := mkNode("b", withNet("dmz"))
 	gs := mkState(mkNet(a, b), a, withInv(bridgeItem("dmz", "default")))
 
-	action := gs.handleCommand("bridge b")
+	action := runCmd(gs,"bridge b")
 
 	if action != actionNone {
 		t.Errorf("action = %v; want actionNone (wrong bridge direction)", action)
@@ -573,7 +580,7 @@ func TestBridge_SameNetwork_Rejected(t *testing.T) {
 	b := mkNode("b") // same default network
 	gs := mkState(mkNet(a, b), a, withInv(bridgeItem("default", "default")))
 
-	action := gs.handleCommand("bridge b")
+	action := runCmd(gs,"bridge b")
 
 	if action != actionNone {
 		t.Errorf("action = %v; want actionNone (same network)", action)
@@ -588,7 +595,7 @@ func TestBridge_NotDirectConnection(t *testing.T) {
 	b := mkNode("b", withNet("dmz"))
 	gs := mkState(mkNet(a, b), a, withInv(bridgeItem("default", "dmz")))
 
-	action := gs.handleCommand("bridge b")
+	action := runCmd(gs,"bridge b")
 
 	if action != actionNone {
 		t.Errorf("action = %v; want actionNone (no direct connection)", action)
@@ -602,7 +609,7 @@ func TestBridge_NodeNotExist(t *testing.T) {
 	a := mkNode("a")
 	gs := mkState(mkNet(a), a, withInv(bridgeItem("default", "dmz")))
 
-	action := gs.handleCommand("bridge z")
+	action := runCmd(gs,"bridge z")
 
 	if action != actionNone {
 		t.Errorf("action = %v; want actionNone", action)
@@ -616,7 +623,7 @@ func TestAssimilate_TextFile(t *testing.T) {
 	a := mkNode("a", withNodeFiles(f))
 	gs := mkState(mkNet(a), a)
 
-	action := gs.handleCommand("assimilate notes.txt")
+	action := runCmd(gs,"assimilate notes.txt")
 
 	if action != actionPersist {
 		t.Errorf("action = %v; want actionPersist", action)
@@ -634,7 +641,7 @@ func TestAssimilate_AlreadyHave(t *testing.T) {
 	a := mkNode("a", withNodeFiles(f))
 	gs := mkState(mkNet(a), a, withInv(f))
 
-	action := gs.handleCommand("assimilate notes.txt")
+	action := runCmd(gs,"assimilate notes.txt")
 
 	if action != actionNone {
 		t.Errorf("action = %v; want actionNone (already assimilated)", action)
@@ -647,7 +654,7 @@ func TestAssimilate_ClaimCode(t *testing.T) {
 	gs := mkState(mkNet(a), a)
 	initialSkill := gs.Stats.ClaimSkill
 
-	action := gs.handleCommand("assimilate claim.code")
+	action := runCmd(gs,"assimilate claim.code")
 
 	if action != actionPersist {
 		t.Errorf("action = %v; want actionPersist", action)
@@ -668,7 +675,7 @@ func TestAssimilate_NotFound(t *testing.T) {
 	a := mkNode("a")
 	gs := mkState(mkNet(a), a)
 
-	action := gs.handleCommand("assimilate missing.txt")
+	action := runCmd(gs,"assimilate missing.txt")
 
 	if action != actionNone {
 		t.Errorf("action = %v; want actionNone", action)
@@ -684,7 +691,7 @@ func TestScan_WithoutApp_UnknownCommand(t *testing.T) {
 	a := mkNode("a")
 	gs := mkState(mkNet(a), a)
 
-	action := gs.handleCommand("scan")
+	action := runCmd(gs,"scan")
 
 	if action != actionNone {
 		t.Errorf("action = %v; want actionNone", action)
@@ -699,7 +706,7 @@ func TestScan_WithApp_ShowsConnections(t *testing.T) {
 	b := mkNode("b")
 	gs := mkState(mkNet(a, b), a, withInv(scanApp()))
 
-	action := gs.handleCommand("scan")
+	action := runCmd(gs,"scan")
 
 	if action != actionNone {
 		t.Errorf("action = %v; want actionNone", action)
@@ -717,7 +724,7 @@ func TestScan_CrossNetworkNode_Tagged(t *testing.T) {
 		ApplicationPayload{Text: "scan v3", Action: "scan_network_v3"})
 	gs := mkState(mkNet(a, b), a, withInv(scanV3))
 
-	gs.handleCommand("scan")
+	runCmd(gs,"scan")
 
 	if !logContains(gs, "⊗dmz") {
 		t.Error("cross-network node should appear with ⊗dmz tag in v3 scan output")
@@ -731,7 +738,7 @@ func TestLS_ShowsFiles(t *testing.T) {
 	a := mkNode("a", withNodeFiles(f))
 	gs := mkState(mkNet(a), a)
 
-	action := gs.handleCommand("ls")
+	action := runCmd(gs,"ls")
 
 	if action != actionNone {
 		t.Errorf("action = %v; want actionNone", action)
@@ -747,7 +754,7 @@ func TestLS_DeletedFilesHidden(t *testing.T) {
 	gs := mkState(mkNet(a), a)
 	gs.DeletedNodeFiles["f-1"] = true
 
-	gs.handleCommand("ls")
+	runCmd(gs,"ls")
 
 	if logContains(gs, "data.txt") {
 		t.Error("deleted file should not appear in ls output")
@@ -760,7 +767,7 @@ func TestUnknownCommand(t *testing.T) {
 	a := mkNode("a")
 	gs := mkState(mkNet(a), a)
 
-	action := gs.handleCommand("frobulate")
+	action := runCmd(gs,"frobulate")
 
 	if action != actionNone {
 		t.Errorf("action = %v; want actionNone", action)
@@ -774,7 +781,7 @@ func TestEmptyInput(t *testing.T) {
 	a := mkNode("a")
 	gs := mkState(mkNet(a), a)
 
-	action := gs.handleCommand("")
+	action := runCmd(gs,"")
 
 	if action != actionNone {
 		t.Errorf("action = %v; want actionNone", action)
@@ -789,10 +796,10 @@ func TestQuit(t *testing.T) {
 	a := mkNode("a")
 	gs := mkState(mkNet(a), a)
 
-	if got := gs.handleCommand("quit"); got != actionQuit {
+	if got := runCmd(gs,"quit"); got != actionQuit {
 		t.Errorf("quit returned %v; want actionQuit", got)
 	}
-	if got := gs.handleCommand("exit"); got != actionQuit {
+	if got := runCmd(gs,"exit"); got != actionQuit {
 		t.Errorf("exit returned %v; want actionQuit", got)
 	}
 }
