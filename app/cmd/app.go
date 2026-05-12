@@ -203,7 +203,9 @@ func (m AppModel) View() tea.View {
 	case ScreenGame:
 		s = m.viewGame()
 	}
-	return tea.NewView(s)
+	v := tea.NewView(s)
+	v.AltScreen = true
+	return v
 }
 
 // ── Main Menu ─────────────────────────────────────────────────────────────────

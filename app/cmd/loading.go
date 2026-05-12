@@ -155,5 +155,7 @@ func (m LoadingModel) View() tea.View {
 		b.WriteString(styleDetail.Render("  "+m.status) + "\n\n")
 		b.WriteString("  " + m.bar.View() + "\n")
 	}
-	return tea.NewView(b.String())
+	v := tea.NewView(b.String())
+	v.AltScreen = true
+	return v
 }
