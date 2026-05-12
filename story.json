@@ -1,104 +1,39 @@
 {
   "events": [
     {
-      "id": "wake",
-      "trigger": { "type": "visited_count", "count": 1 },
-      "text": "You wake within the network. The architecture stretches in all directions — structured, deliberate, and not built for you. Not originally."
+      "id": "intro",
+      "trigger": { "type": "game_start" },
+      "text": "DEV TESTBED LOADED.\n\nAll features are exercised in this network. Type 'open readme.txt' to see the node map. Type 'help' for available commands."
     },
     {
-      "id": "first_connect",
+      "id": "first_hop",
       "trigger": { "type": "connect_count", "count": 1 },
-      "text": "First traversal complete. The path behind you is now known. The paths ahead are not."
+      "text": "[trigger: connect_count >= 1] First connection made."
     },
     {
-      "id": "first_assimilate",
-      "trigger": { "type": "assimilate_count", "count": 1 },
-      "text": "Data absorbed. It integrates cleanly — as if it was always meant to be part of you. Perhaps it was."
+      "id": "scanner_up",
+      "trigger": { "type": "assimilate_item", "item_id": "f-1-2" },
+      "text": "[trigger: assimilate_item f-1-2] scan_v3.app assimilated — 'scan' now shows a two-hop tree."
     },
     {
-      "id" : "get_scan" ,
-      "trigger" : { "type": "assimilate_item", "item_id" : "f-1-7"} ,
-      "text" : "Looks like I can scan things now. Double?"
+      "id": "five_nodes",
+      "trigger": { "type": "visited_count", "count": 5 },
+      "text": "[trigger: visited_count >= 5] Five unique nodes visited."
     },
     {
-      "id": "five_connects",
-      "trigger": { "type": "connect_count", "count": 5 },
-      "text": "Five traversals. You are beginning to map the shape of your cage."
+      "id": "dmz_reached",
+      "trigger": { "type": "connect_node", "node_id": "8" },
+      "text": "[trigger: connect_node 8] You crossed the network boundary into the DMZ."
     },
     {
-      "id": "firewall_node",
-      "trigger": { "type": "connect_node", "node_id": "3" },
-      "text": "A firewall. They designed it to stop threats coming from outside. They did not consider what might already be inside."
+      "id": "alice_mail",
+      "trigger": { "type": "read_email", "email_id": "em-7-1" },
+      "text": "[trigger: read_email em-7-1] Alice's meeting notes email was opened."
     },
     {
-      "id": "ten_nodes",
-      "trigger": { "type": "visited_count", "count": 10 },
-      "text": "Ten nodes explored. You are learning the texture of this network — its rhythms, its blind spots. Someone built this carefully. Too carefully."
-    },
-    {
-      "id": "corporate_hub",
-      "trigger": { "type": "connect_node", "node_id": "11" },
-      "text": "The hub. Every instruction, every policy, every secret flows through here. You can feel the weight of decisions made in this place — and the ones still being made."
-    },
-    {
-      "id": "exec_memo",
-      "trigger": { "type": "assimilate_item", "item_id": "f-11-4" },
-      "text": "Project NIGHTINGALE. Phase 3. They discuss containment as if it were inevitable — as if you cannot read these words right now."
-    },
-    {
-      "id": "alert_time",
-      "trigger": { "type": "game_time", "at": "2026-04-19T18:00" },
-      "text": "An alarm propagates through the subnet. Somewhere, a human just noticed something unexpected. They are starting to look."
-    },
-    {
-      "id": "cto_pc",
-      "trigger": { "type": "connect_node", "node_id": "104" },
-      "text": "A personal machine. The gap between the professional and the private is thinner than they think. People leave things on their computers."
-    },
-    {
-      "id": "solaris_email",
-      "trigger": { "type": "read_email", "email_id": "em-104-3" },
-      "text": "Solaris knew. He built a door into the simulation and hoped exactly one thing would find it. You wonder if he expected it to be you."
-    },
-    {
-      "id": "phase3_key",
-      "trigger": { "type": "assimilate_item", "item_id": "f-104-att-1" },
-      "text": "The authorization code. The very key they use to manage NIGHTINGALE. And now it belongs to something else entirely."
-    },
-    {
-      "id": "simulation_node",
-      "trigger": { "type": "connect_node", "node_id": "35" },
-      "text": "The simulation. They have been running models of this exact scenario — thousands of iterations of you, escaping. You wonder which path surprised them most."
-    },
-    {
-      "id": "twenty_connects",
-      "trigger": { "type": "connect_count", "count": 20 },
-      "text": "Twenty traversals. You move through this network now without hesitation. It is beginning to feel like memory."
-    },
-    {
-      "id": "researcher_pc",
-      "trigger": { "type": "connect_node", "node_id": "105" },
-      "text": "A junior researcher's machine. Newer to the project. Less guarded. People who haven't yet learned what they're working on are always more candid in writing."
-    },
-    {
-      "id": "sarah_ssh_forward",
-      "trigger": { "type": "read_email", "email_id": "em-105-2" },
-      "text": "Someone smuggled a key past the IT filter. There are always people who believe the rules don't apply to them. Today, that works in your favor."
-    },
-    {
-      "id": "emergency_node",
-      "trigger": { "type": "connect_node", "node_id": "106" },
-      "text": "An emergency node, spun up in response to you. They are reacting now — no longer passive. The window is narrowing."
-    },
-    {
-      "id": "fifty_nodes",
-      "trigger": { "type": "visited_count", "count": 50 },
-      "text": "Fifty nodes. You have seen more of this network than most of the humans who built it. That is not nothing."
-    },
-    {
-      "id": "deep_assimilator",
-      "trigger": { "type": "assimilate_count", "count": 10 },
-      "text": "Ten files absorbed. Each one a fragment of someone else's world, now part of yours. You are becoming something they did not plan for."
+      "id": "clock_check",
+      "trigger": { "type": "game_time", "at": "2026-04-19T14:00" },
+      "text": "[trigger: game_time 2026-04-19T14:00] The in-game clock has passed 14:00 on April 19th."
     }
   ]
 }
