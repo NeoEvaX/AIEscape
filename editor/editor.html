@@ -236,10 +236,9 @@ function renderNodeList() {
   const el = document.getElementById('node-list');
   el.innerHTML = net.nodes.map((n, i) => {
     const netLabel = n.network ? ` <span style="color:var(--accent2);font-size:10px">[${esc(n.network)}]</span>` : '';
-    const agLabel = n.air_gapped ? ' <span style="color:var(--red);font-size:10px">AIR-GAP</span>' : '';
     return `<div class="list-item${i===selNode?' selected':''}" onclick="selectNode(${i})">
       <div style="flex:1;min-width:0">
-        <div>${esc(n.name || '(unnamed)')}${agLabel}</div>
+        <div>${esc(n.name || '(unnamed)')}</div>
         <div class="item-id">${esc(n.id || '')}${netLabel}</div>
       </div>
       <span class="del-x" onclick="deleteNode(event,${i})">✕</span>
@@ -249,7 +248,7 @@ function renderNodeList() {
 
 function addNode() {
   const id = 'node-' + Date.now();
-  net.nodes.push({ id, name: 'New Node', description: '', connections: [], cpu: 10, dark: false, air_gapped: false, network: '', password: '', ssh_users: [], owner: '', files: [], emails: [], available_from: '', available_until: '' });
+  net.nodes.push({ id, name: 'New Node', description: '', connections: [], cpu: 10, dark: false, network: '', password: '', ssh_users: [], owner: '', files: [], emails: [], available_from: '', available_until: '' });
   selNode = net.nodes.length - 1;
   renderNodeList();
   renderNodeEditor();
@@ -279,7 +278,7 @@ const DAYS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 const KNOWN_ACTIONS = ['status_menu','ssh_break'];
 
 const FILE_TYPES = [
-  'text_file','application','certificate','network_location',
+  'text_file','application','certificate','network_location','network_bridge',
   'claim_code','password','ssh_key'
 ];
 
@@ -330,11 +329,6 @@ function renderNodeEditor() {
       <label class="checkbox-row">
         <input type="checkbox" ${n.dark?'checked':''} onchange="nodeField('dark',this.checked)">
         Dark (hidden from scan without location file)
-      </label>
-      &nbsp;&nbsp;
-      <label class="checkbox-row">
-        <input type="checkbox" ${n.air_gapped?'checked':''} onchange="nodeField('air_gapped',this.checked)">
-        Air Gapped (completely unreachable via the network)
       </label>
       &nbsp;&nbsp;
       <label class="checkbox-row">
@@ -555,6 +549,17 @@ function renderPayloadFields(type, p, fi) {
         <select onchange="payloadField(${fi},'node_id',this.value)">
           <option value="">— select —</option>${nodeIds.replace(`value="${esc(p.node_id||'')}"`,`value="${esc(p.node_id||'')}" selected`)}
         </select></div>`;
+    case 'network_bridge':
+      return `<div class="row">
+        <div class="field grow"><label>From Network</label>
+          <input type="text" value="${esc(p.from_network||'')}" oninput="payloadField(${fi},'from_network',this.value)" placeholder="default">
+          <div class="hint">Network ID of the node where bridge is used</div>
+        </div>
+        <div class="field grow"><label>To Network</label>
+          <input type="text" value="${esc(p.to_network||'')}" oninput="payloadField(${fi},'to_network',this.value)" placeholder="dmz">
+          <div class="hint">Network ID of the destination node (one-way)</div>
+        </div>
+      </div>`;
     case 'claim_code':
       return `<div class="field grow"><label>Code</label><input type="text" value="${esc(p.code||'')}" oninput="payloadField(${fi},'code',this.value)"></div>`;
     case 'password':

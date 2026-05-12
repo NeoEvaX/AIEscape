@@ -78,7 +78,6 @@ type Node struct {
 	Files          []Item
 	CPU            int      // 1–255
 	Dark           bool     // dark nodes are hidden from scan unless player has the location file
-	AirGapped      bool     // air-gapped nodes exist but are completely unreachable via the network
 	Network        string   // logical network island ID; empty = "default"
 	Password       string   // empty = no password required
 	SSHUsers       []string // non-empty = SSH auth required; lists allowed usernames
@@ -105,9 +104,6 @@ func sameNetwork(a, b *Node) bool {
 }
 
 func (n *Node) IsAvailable(gameTime time.Time) bool {
-	if n.AirGapped {
-		return false
-	}
 	if !isAvailableAt(n.AvailableFrom, n.AvailableUntil, gameTime) {
 		return false
 	}
@@ -462,15 +458,13 @@ func (gs *GameState) hasAppAction(action string) bool {
 }
 
 // visibleConnections returns the nodes connected to node that the player can see
-// at the current game time. Only nodes in the same network island are shown.
+// at the current game time. Cross-network nodes in the connections list are
+// included — they appear in scan but require 'bridge' to enter.
 func (gs *GameState) visibleConnections(node *Node) []*Node {
 	var result []*Node
 	for _, id := range node.Connections {
 		n, ok := gs.Network.Nodes[id]
 		if !ok {
-			continue
-		}
-		if !sameNetwork(node, n) {
 			continue
 		}
 		if n.Dark && !gs.hasLocationFile(id) {
@@ -487,6 +481,9 @@ func (gs *GameState) visibleConnections(node *Node) []*Node {
 // nodeScanTags returns a short tag string for display in scan output.
 func (gs *GameState) nodeScanTags(n *Node) string {
 	var tags []string
+	if !sameNetwork(gs.CurrentNode, n) {
+		tags = append(tags, "⊗"+nodeNetwork(n))
+	}
 	if n.ID == gs.CurrentNode.ID {
 		tags = append(tags, "◈")
 	} else if gs.VisitedNodes[n.ID] {
@@ -571,6 +568,24 @@ func (gs *GameState) hasLocationFile(nodeID string) bool {
 		}
 		p, err := item.AsNetworkLocation()
 		if err == nil && p.NodeID == nodeID {
+			return true
+		}
+	}
+	return false
+}
+
+// hasBridgeTo returns true if inventory contains a network_bridge item whose
+// FromNetwork and ToNetwork match the given pair exactly (one-directional).
+func (gs *GameState) hasBridgeTo(fromNet, toNet string) bool {
+	for _, item := range gs.Inventory {
+		if item.Type != ItemTypeNetworkBridge {
+			continue
+		}
+		p, err := item.AsNetworkBridge()
+		if err != nil {
+			continue
+		}
+		if p.FromNetwork == fromNet && p.ToNetwork == toNet {
 			return true
 		}
 	}
@@ -795,10 +810,7 @@ func (gs *GameState) handleCommand(input string) gameAction {
 				if !ok {
 					continue
 				}
-				if !sameNetwork(gs.CurrentNode, node) {
-					continue
-				}
-				if node.AirGapped || !node.IsAvailable(gs.GameTime) {
+				if !node.IsAvailable(gs.GameTime) {
 					continue
 				}
 				if node.Dark && !gs.hasLocationFile(id) {
@@ -824,10 +836,6 @@ func (gs *GameState) handleCommand(input string) gameAction {
 			gs.MessageLog = append(gs.MessageLog, fmt.Sprintf("Node %q does not exist.", targetID))
 			return actionNone
 		}
-		if target.AirGapped {
-			gs.MessageLog = append(gs.MessageLog, fmt.Sprintf("Node %s is air-gapped and unreachable via the network.", targetID))
-			return actionNone
-		}
 		if !target.IsAvailable(gs.GameTime) {
 			gs.MessageLog = append(gs.MessageLog, fmt.Sprintf("Node %s is currently offline.", targetID))
 			return actionNone
@@ -842,6 +850,53 @@ func (gs *GameState) handleCommand(input string) gameAction {
 				return actionNone
 			}
 			gs.MessageLog = append(gs.MessageLog, fmt.Sprintf("Routing via location file to node %s.", targetID))
+		}
+		if len(target.SSHUsers) > 0 {
+			gs.PendingConnectNode = target
+			return actionConnectSSH
+		}
+		if target.Password != "" {
+			gs.PendingConnectNode = target
+			return actionConnectAuth
+		}
+		target.Discovered = true
+		gs.CurrentNode = target
+		gs.VisitedNodes[target.ID] = true
+		gs.OpenCtx = openContextNode
+		gs.OpenEmailID = ""
+		gs.GameTime = gs.GameTime.Add(time.Hour)
+		gs.ConnectCount++
+		gs.MessageLog = append(gs.MessageLog, nodeInfo(target))
+		return actionPersist
+
+	case "bridge":
+		if len(parts) < 2 {
+			gs.MessageLog = append(gs.MessageLog, "Usage: bridge <node_id>")
+			return actionNone
+		}
+		targetID := parts[1]
+		target, exists := gs.Network.Nodes[targetID]
+		if !exists {
+			gs.MessageLog = append(gs.MessageLog, fmt.Sprintf("Node %q does not exist.", targetID))
+			return actionNone
+		}
+		if !target.IsAvailable(gs.GameTime) {
+			gs.MessageLog = append(gs.MessageLog, fmt.Sprintf("Node %s is currently offline.", targetID))
+			return actionNone
+		}
+		if !gs.Network.CanReach(gs.CurrentNode.ID, targetID) {
+			gs.MessageLog = append(gs.MessageLog, fmt.Sprintf("No direct connection to node %s from here.", targetID))
+			return actionNone
+		}
+		if sameNetwork(gs.CurrentNode, target) {
+			gs.MessageLog = append(gs.MessageLog, fmt.Sprintf("Node %s is already on this network — use 'connect'.", targetID))
+			return actionNone
+		}
+		fromNet := nodeNetwork(gs.CurrentNode)
+		toNet := nodeNetwork(target)
+		if !gs.hasBridgeTo(fromNet, toNet) {
+			gs.MessageLog = append(gs.MessageLog, fmt.Sprintf("No bridge adapter found for %s → %s.", fromNet, toNet))
+			return actionNone
 		}
 		if len(target.SSHUsers) > 0 {
 			gs.PendingConnectNode = target

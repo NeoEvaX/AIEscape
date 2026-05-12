@@ -26,7 +26,6 @@ type networkNode struct {
 	Connections    []string           `json:"connections"`
 	CPU            int                `json:"cpu"`
 	Dark           bool               `json:"dark"`
-	AirGapped      bool               `json:"air_gapped"`
 	Network        string             `json:"network"`
 	Password       string             `json:"password"`
 	SSHUsers       []string           `json:"ssh_users"`
@@ -197,7 +196,6 @@ func loadNetworkFromBytes(data []byte) (*Network, error) {
 			Connections:    n.Connections,
 			CPU:            cpu,
 			Dark:           n.Dark,
-			AirGapped:      n.AirGapped,
 			Network:        n.Network,
 			Password:       n.Password,
 			SSHUsers:       n.SSHUsers,

@@ -13,6 +13,7 @@ const (
 	ItemTypeApplication     ItemType = "application"
 	ItemTypeCertificate     ItemType = "certificate"
 	ItemTypeNetworkLocation ItemType = "network_location"
+	ItemTypeNetworkBridge   ItemType = "network_bridge"
 	ItemTypeClaimCode       ItemType = "claim_code"
 	ItemTypePassword        ItemType = "password"
 	ItemTypeSSHKey          ItemType = "ssh_key"
@@ -28,6 +29,8 @@ func (t ItemType) Display() string {
 		return "Certificate"
 	case ItemTypeNetworkLocation:
 		return "Network Location"
+	case ItemTypeNetworkBridge:
+		return "Network Bridge"
 	case ItemTypeClaimCode:
 		return "Claim Code"
 	case ItemTypePassword:
@@ -138,5 +141,21 @@ func (item *Item) AsNetworkLocation() (*NetworkLocationPayload, error) {
 		return nil, fmt.Errorf("item %q is not a network location", item.ID)
 	}
 	var p NetworkLocationPayload
+	return &p, json.Unmarshal(item.Payload, &p)
+}
+
+// NetworkBridgePayload grants the player the ability to cross from one logical
+// network island to another via a direct node connection. One-directional: only
+// FromNetwork → ToNetwork works; the reverse requires a separate item.
+type NetworkBridgePayload struct {
+	FromNetwork string `json:"from_network"`
+	ToNetwork   string `json:"to_network"`
+}
+
+func (item *Item) AsNetworkBridge() (*NetworkBridgePayload, error) {
+	if item.Type != ItemTypeNetworkBridge {
+		return nil, fmt.Errorf("item %q is not a network bridge", item.ID)
+	}
+	var p NetworkBridgePayload
 	return &p, json.Unmarshal(item.Payload, &p)
 }
