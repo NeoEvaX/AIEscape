@@ -1,4 +1,4 @@
-.PHONY: build run test dist dist-linux dist-mac dist-windows dist-clean
+.PHONY: build run test editor dist dist-linux dist-mac dist-windows dist-clean
 
 build:
 	go build -o bin/ai-escape ./app/cmd
@@ -8,6 +8,9 @@ run: build
 
 test:
 	go test -v ./...
+
+editor:
+	go run ./editor
 
 # ── Distribution builds ───────────────────────────────────────────────────────
 # Embeds network.json and story.json into the binary so no data files are

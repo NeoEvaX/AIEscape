@@ -3,6 +3,7 @@
 /cmd
 /saves.db
 /app/cmd/cmd
+/editor/editor
 
 # Distribution builds
 /dist
