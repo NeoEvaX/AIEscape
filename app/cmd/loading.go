@@ -85,6 +85,8 @@ type LoadingModel struct {
 	network *Network
 	story   *StoryCollection
 	err     error
+	winW    int
+	winH    int
 }
 
 func NewLoadingModel() LoadingModel {
@@ -99,6 +101,12 @@ func (m LoadingModel) Init() tea.Cmd {
 }
 
 func (m LoadingModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if wsm, ok := msg.(tea.WindowSizeMsg); ok {
+		m.winW = wsm.Width
+		m.winH = wsm.Height
+		return m, nil
+	}
+
 	switch msg := msg.(type) {
 
 	case progress.FrameMsg:
@@ -134,7 +142,10 @@ func (m LoadingModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, tea.Batch(m.bar.SetPercent(1.0), readyCmd())
 
 	case readyMsg:
-		return NewAppModel(m.db, m.network, m.story), nil
+		app := NewAppModel(m.db, m.network, m.story)
+		app.winW = m.winW
+		app.winH = m.winH
+		return app, nil
 
 	case tea.KeyPressMsg:
 		if msg.String() == "ctrl+c" {

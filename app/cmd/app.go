@@ -205,6 +205,7 @@ func (m AppModel) View() tea.View {
 	}
 	v := tea.NewView(s)
 	v.AltScreen = true
+	v.MouseMode = tea.MouseModeCellMotion
 	return v
 }
 
@@ -632,6 +633,17 @@ func (m AppModel) updateGame(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, sshTickCmd()
 
+	case tea.MouseWheelMsg:
+		if msg.Button == tea.MouseWheelUp {
+			m.logScroll += 3
+		} else if msg.Button == tea.MouseWheelDown {
+			m.logScroll -= 3
+			if m.logScroll < 0 {
+				m.logScroll = 0
+			}
+		}
+		return m, nil
+
 	case tea.KeyPressMsg:
 		// During a claim, only allow Esc to cancel it.
 		if m.claim.active {
@@ -728,11 +740,11 @@ func (m AppModel) updateGame(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 			if input != "" {
-				m.logScroll = 0
 				gs.History = append(gs.History, input)
 
 				// Intercept the lore command here since it needs access to m.story.
 				if input == "lore" {
+					m.logScroll = 0
 					gs.MessageLog = append(gs.MessageLog, "> lore")
 					var seen []StoryEvent
 					for _, event := range m.story.Events {
@@ -755,6 +767,18 @@ func (m AppModel) updateGame(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 				cmdLines, action := handleCommand(gs, input)
 				gs.MessageLog = append(gs.MessageLog, cmdLines...)
+
+				// Scroll so the command echo (first line of cmdLines) is visible at top.
+				addedLines := 0
+				for _, entry := range cmdLines {
+					addedLines += 1 + strings.Count(entry, "\n")
+				}
+				visible := m.logVisibleLines()
+				if addedLines >= visible {
+					m.logScroll = addedLines - visible + 1
+				} else {
+					m.logScroll = 0
+				}
 
 				m, stCmd := m.withStoryCheck(gs)
 
@@ -1136,7 +1160,12 @@ func (m AppModel) viewGame() string {
 	if endLine > total {
 		endLine = total
 	}
-	b.WriteString(strings.Join(allLines[startLine:endLine], "\n"))
+	logLines := allLines[startLine:endLine]
+	// Pad with empty lines at top so the log area always fills visH rows.
+	if padding := visH - len(logLines); padding > 0 {
+		b.WriteString(strings.Repeat("\n", padding))
+	}
+	b.WriteString(strings.Join(logLines, "\n"))
 	b.WriteByte('\n')
 	b.WriteByte('\n')
 	if m.ssh.active {
