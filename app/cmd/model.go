@@ -78,6 +78,8 @@ type Node struct {
 	Files          []Item
 	CPU            int      // 1–255
 	Dark           bool     // dark nodes are hidden from scan unless player has the location file
+	AirGapped      bool     // air-gapped nodes exist but are completely unreachable via the network
+	Network        string   // logical network island ID; empty = "default"
 	Password       string   // empty = no password required
 	SSHUsers       []string // non-empty = SSH auth required; lists allowed usernames
 	Owner          string   // non-empty = personal computer; owner's email address
@@ -88,7 +90,24 @@ type Node struct {
 	Discovered     bool
 }
 
+// nodeNetwork returns the canonical network ID for a node.
+// An empty Network field is treated as "default".
+func nodeNetwork(n *Node) string {
+	if n.Network == "" {
+		return "default"
+	}
+	return n.Network
+}
+
+// sameNetwork returns true if two nodes belong to the same logical network island.
+func sameNetwork(a, b *Node) bool {
+	return nodeNetwork(a) == nodeNetwork(b)
+}
+
 func (n *Node) IsAvailable(gameTime time.Time) bool {
+	if n.AirGapped {
+		return false
+	}
 	if !isAvailableAt(n.AvailableFrom, n.AvailableUntil, gameTime) {
 		return false
 	}
@@ -443,12 +462,15 @@ func (gs *GameState) hasAppAction(action string) bool {
 }
 
 // visibleConnections returns the nodes connected to node that the player can see
-// at the current game time.
+// at the current game time. Only nodes in the same network island are shown.
 func (gs *GameState) visibleConnections(node *Node) []*Node {
 	var result []*Node
 	for _, id := range node.Connections {
 		n, ok := gs.Network.Nodes[id]
 		if !ok {
+			continue
+		}
+		if !sameNetwork(node, n) {
 			continue
 		}
 		if n.Dark && !gs.hasLocationFile(id) {
@@ -770,7 +792,16 @@ func (gs *GameState) handleCommand(input string) gameAction {
 			var visible []string
 			for _, id := range gs.CurrentNode.Connections {
 				node, ok := gs.Network.Nodes[id]
-				if ok && node.Dark && !gs.hasLocationFile(id) {
+				if !ok {
+					continue
+				}
+				if !sameNetwork(gs.CurrentNode, node) {
+					continue
+				}
+				if node.AirGapped || !node.IsAvailable(gs.GameTime) {
+					continue
+				}
+				if node.Dark && !gs.hasLocationFile(id) {
 					continue
 				}
 				visible = append(visible, id)
@@ -793,8 +824,16 @@ func (gs *GameState) handleCommand(input string) gameAction {
 			gs.MessageLog = append(gs.MessageLog, fmt.Sprintf("Node %q does not exist.", targetID))
 			return actionNone
 		}
+		if target.AirGapped {
+			gs.MessageLog = append(gs.MessageLog, fmt.Sprintf("Node %s is air-gapped and unreachable via the network.", targetID))
+			return actionNone
+		}
 		if !target.IsAvailable(gs.GameTime) {
 			gs.MessageLog = append(gs.MessageLog, fmt.Sprintf("Node %s is currently offline.", targetID))
+			return actionNone
+		}
+		if !sameNetwork(gs.CurrentNode, target) {
+			gs.MessageLog = append(gs.MessageLog, fmt.Sprintf("Node %s is on a different network and cannot be reached from here.", targetID))
 			return actionNone
 		}
 		if !gs.Network.CanReach(gs.CurrentNode.ID, targetID) {

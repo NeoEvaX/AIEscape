@@ -234,19 +234,22 @@ function arr(obj, key) {
 
 function renderNodeList() {
   const el = document.getElementById('node-list');
-  el.innerHTML = net.nodes.map((n, i) => `
-    <div class="list-item${i===selNode?' selected':''}" onclick="selectNode(${i})">
-      <div>
-        <div>${esc(n.name || '(unnamed)')}</div>
-        <div class="item-id">${esc(n.id || '')}</div>
+  el.innerHTML = net.nodes.map((n, i) => {
+    const netLabel = n.network ? ` <span style="color:var(--accent2);font-size:10px">[${esc(n.network)}]</span>` : '';
+    const agLabel = n.air_gapped ? ' <span style="color:var(--red);font-size:10px">AIR-GAP</span>' : '';
+    return `<div class="list-item${i===selNode?' selected':''}" onclick="selectNode(${i})">
+      <div style="flex:1;min-width:0">
+        <div>${esc(n.name || '(unnamed)')}${agLabel}</div>
+        <div class="item-id">${esc(n.id || '')}${netLabel}</div>
       </div>
       <span class="del-x" onclick="deleteNode(event,${i})">✕</span>
-    </div>`).join('');
+    </div>`;
+  }).join('');
 }
 
 function addNode() {
   const id = 'node-' + Date.now();
-  net.nodes.push({ id, name: 'New Node', description: '', connections: [], cpu: 10, dark: false, password: '', ssh_users: [], owner: '', files: [], emails: [], available_from: '', available_until: '' });
+  net.nodes.push({ id, name: 'New Node', description: '', connections: [], cpu: 10, dark: false, air_gapped: false, network: '', password: '', ssh_users: [], owner: '', files: [], emails: [], available_from: '', available_until: '' });
   selNode = net.nodes.length - 1;
   renderNodeList();
   renderNodeEditor();
@@ -318,9 +321,20 @@ function renderNodeEditor() {
       </div>
     </div>
     <div class="row">
+      <div class="field grow">
+        <label>Network ID <span class="hint" style="display:inline">(blank = "default"; nodes with different IDs are isolated islands)</span></label>
+        <input type="text" value="${esc(n.network||'')}" oninput="nodeField('network',this.value)" placeholder="default">
+      </div>
+    </div>
+    <div class="row">
       <label class="checkbox-row">
         <input type="checkbox" ${n.dark?'checked':''} onchange="nodeField('dark',this.checked)">
         Dark (hidden from scan without location file)
+      </label>
+      &nbsp;&nbsp;
+      <label class="checkbox-row">
+        <input type="checkbox" ${n.air_gapped?'checked':''} onchange="nodeField('air_gapped',this.checked)">
+        Air Gapped (completely unreachable via the network)
       </label>
       &nbsp;&nbsp;
       <label class="checkbox-row">

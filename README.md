@@ -33,6 +33,8 @@ Defines the network graph: every node, the files on it, and how nodes connect to
   "connections": ["2", "3"],        // IDs of directly reachable nodes
   "cpu": 16,                        // Node CPU value. Affects claim time and brute-force duration. Min 1.
   "dark": true,                     // If true, hidden from scan unless player has a network_location file pointing here
+  "air_gapped": true,               // If true, completely unreachable via any network means (scan, connect, loc files)
+  "network": "corp",                // Logical network island ID. Omit or "" = "default" island. Cross-island travel not yet implemented.
   "password": "s3cur1ty",           // If set, player must authenticate before connecting
   "ssh_users": ["marcus"],          // If set, SSH authentication is required; lists allowed usernames
   "owner": "m.hale@corp.net",       // If set, marks this as a Personal Computer with a mail inbox
